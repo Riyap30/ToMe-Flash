@@ -1,0 +1,42 @@
+# ToMe-Flash experiment — pinned dependencies
+# Generated from the NYU Greene HPC environment (Python 3.10, CUDA 12.1)
+#
+# To reproduce:
+#   conda activate /ext3/env
+#   pip install -r requirements.txt
+#
+# For packages installed from GitHub (not on PyPI), see the notes below.
+
+# Core deep learning
+torch==2.1.2+cu121
+torchvision==0.16.2+cu121
+
+# Vision Transformer model hub
+timm==0.9.12
+
+# Scientific computing / statistics
+scipy==1.11.4
+statsmodels==0.14.1
+numpy==1.26.3
+
+# Visualisation
+matplotlib==3.8.2
+
+# Experiment tracking
+wandb==0.16.2
+
+# System monitoring
+psutil==5.9.7
+
+# -----------------------------------------------------------------------
+# GitHub-sourced packages (install manually — not on PyPI index)
+# -----------------------------------------------------------------------
+# Token Merging (ToMe):
+#   pip install git+https://github.com/facebookresearch/ToMe.git
+#   Tested commit: main branch, ~Jan 2024
+#
+# FlashAttention-2:
+#   pip install flash-attn==2.4.2 --no-build-isolation
+#   Requires: CUDA 11.6+, PyTorch 2.x, Ampere+ GPU (A100 supported)
+#   Source: https://github.com/Dao-AILab/flash-attention
+# -----------------------------------------------------------------------
