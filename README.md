@@ -1,6 +1,4 @@
-# Environment Setup on Greene HPC (Singularity + Conda)
-
-This guide covers setting up a reproducible GPU environment on NYU HPC using a Singularity container with a persistent overlay filesystem. The stack targets FlashAttention-2, ToMe, and PyTorch on CUDA 12.1.
+This guide covers setting up a reproducible GPU environment on NYU HPC using a Singularity container with a persistent overlay filesystem. The stack targets FlashAttention-2, ToMe, and PyTorch on CUDA 12.1. Further includes instructions on running the 2*2 experimental design and performing statistical analysis. 
 
 ---
 
