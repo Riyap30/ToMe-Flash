@@ -109,7 +109,11 @@ def compare_memory(results_a: Dict[str, Any], results_b: Dict[str, Any]) -> Dict
 def compare_accuracy(acc_a: Dict[str, Any], acc_b: Dict[str, Any]) -> Dict[str, Any]:
     """Two-proportion z-test comparing top-1 accuracy between two conditions.
 
-    Uses statsmodels.stats.proportion.proportions_ztest (two-sided).
+    Hypothesis test: pooled-SE z-test under H0: p_a == p_b (two-sided).
+    Confidence interval: standard two-proportion Z-interval using unpooled SE,
+    i.e. CI on (p_b - p_a) = (p_b - p_a) ± z * sqrt(p_b(1-p_b)/n_b + p_a(1-p_a)/n_a).
+
+    Both computed with scipy.stats.norm — no external dependencies.
 
     Args:
         acc_a: Accuracy dict from run_accuracy_eval() for condition A (baseline).
@@ -119,23 +123,24 @@ def compare_accuracy(acc_a: Dict[str, Any], acc_b: Dict[str, Any]) -> Dict[str, 
         dict with keys:
           z_stat, p_value, significant, ci_low, ci_high, prop_a, prop_b, diff_pct
     """
-    from statsmodels.stats.proportion import proportions_ztest, proportion_confint
-
-    count = [acc_b["correct"], acc_a["correct"]]
-    nobs  = [acc_b["total"],   acc_a["total"]]
-
-    z_stat, p_value = proportions_ztest(count, nobs, alternative="two-sided")
-
+    n_a, n_b      = acc_a["total"],   acc_b["total"]
+    k_a, k_b      = acc_a["correct"], acc_b["correct"]
     prop_a: float = acc_a["top1_proportion"]
     prop_b: float = acc_b["top1_proportion"]
+
+    # Pooled SE for hypothesis test (H0: p_a == p_b)
+    p_pool  = (k_a + k_b) / (n_a + n_b)
+    se_pool = math.sqrt(p_pool * (1 - p_pool) * (1 / n_a + 1 / n_b))
+    z_stat  = (prop_b - prop_a) / se_pool if se_pool > 0 else 0.0
+    p_value = float(2 * (1 - sci_stats.norm.cdf(abs(z_stat))))
+
     diff_pct: float = (prop_b - prop_a) * 100
 
-    # 95% Wilson CI on the difference (approximate: difference of individual CIs)
-    ci_lo_a, ci_hi_a = proportion_confint(acc_a["correct"], acc_a["total"], alpha=0.05, method="wilson")
-    ci_lo_b, ci_hi_b = proportion_confint(acc_b["correct"], acc_b["total"], alpha=0.05, method="wilson")
-    # Conservative CI on difference: (b_lo - a_hi, b_hi - a_lo)
-    ci_low  = float(ci_lo_b - ci_hi_a)
-    ci_high = float(ci_hi_b - ci_lo_a)
+    # Standard two-proportion Z-interval: unpooled SE for CI estimation
+    z_crit  = sci_stats.norm.ppf(0.975)  # 1.96 for 95% CI
+    se_diff = math.sqrt(prop_b * (1 - prop_b) / n_b + prop_a * (1 - prop_a) / n_a)
+    ci_low  = float(diff_pct - z_crit * se_diff * 100)
+    ci_high = float(diff_pct + z_crit * se_diff * 100)
 
     return {
         "z_stat":     float(z_stat),
@@ -203,3 +208,69 @@ def print_stats_table(
     print("Note: α = 0.05 (pre-registered). Throughput/memory: Welch's t-test.")
     print("Accuracy: two-proportion z-test (statsmodels).")
     print("=" * W + "\n")
+
+
+def summarize_tome_sweep(sweep_results: list) -> None:
+    """Print an ASCII summary table for the full ToMe r-value sweep.
+
+    Args:
+        sweep_results: The 'results' list from tome_sweep_summary.json.
+                       Each entry must have the keys written by run_token_merging.py.
+    """
+    # Identify recommended_r: largest r with accuracy_drop < 1% and significant
+    qualifying = [
+        e for e in sweep_results
+        if e.get("accuracy_drop_pct") is not None
+        and e["accuracy_drop_pct"] < 1.0
+        and e["significant"]
+    ]
+    if qualifying:
+        recommended_r = max(qualifying, key=lambda e: e["r"])["r"]
+    elif sweep_results:
+        valid = [e for e in sweep_results if e.get("accuracy_drop_pct") is not None]
+        recommended_r = (
+            min(valid, key=lambda e: e["accuracy_drop_pct"])["r"] if valid
+            else sweep_results[0]["r"]
+        )
+    else:
+        recommended_r = None
+
+    col_w = 76
+    header = (
+        f"  {'r':>2}  {'tokens':>6}  {'thrpt (img/s)':>13}  "
+        f"{'vs base':>8}  {'p-val':>7}  {'sig':>3}  {'top-1':>6}  {'acc drop':>9}"
+    )
+    sep = "-" * col_w
+
+    print()
+    print("=" * col_w)
+    print("Token Merging Sweep — Summary Table")
+    print("=" * col_w)
+    print(header)
+    print(sep)
+
+    for e in sweep_results:
+        marker = "→" if e["r"] == recommended_r else "  "
+        sig    = " * " if e["significant"] else "   "
+        thrpt  = f"{e['mean_throughput']:.1f} ± {e['std_throughput']:.3f}"
+        vs_base = f"{e['throughput_improvement_pct']:+.1f}%"
+
+        if e.get("top1_accuracy") is not None:
+            acc  = f"{e['top1_accuracy']:.4f}"
+            drop = f"{e['accuracy_drop_pct']:+.2f}%"
+        else:
+            acc  = "  N/A "
+            drop = "   N/A "
+
+        print(
+            f"{marker} {e['r']:>2}  {e['final_tokens']:>6}  "
+            f"{thrpt:>13}  {vs_base:>8}  "
+            f"{e['p_value']:>7.4f}  {sig}  {acc}  {drop}"
+        )
+
+    print(sep)
+    print(f"→ = recommended r  |  * = p < 0.05  |  α = 0.05 (pre-registered)")
+    if recommended_r is not None:
+        print(f"Recommended r = {recommended_r}  (use for combined ToMe+FlashAttn condition)")
+    print("=" * col_w)
+    print()
