@@ -1,70 +1,106 @@
 """
-FlashAttention-only model for Phase 2 of the ToMe-Flash benchmark.
+models/flash_only.py
 
-Replaces the standard scaled-dot-product attention in each DeiT-B/16 transformer
-block with the FlashAttention-2 kernel (flash_attn_func) while keeping all other
-weights and the token sequence unchanged.
+FlashAttention-2-only model for Phase 3 of the ToMe-Flash benchmark.
 
-TODO (Phase 2): implement FlashAttentionBlock and load_flash_model().
+Surgically replaces the scaled-dot-product attention kernel in every DeiT-B/16
+transformer block with flash_attn_func while keeping all other weights (QKV
+projection, output projection, MLP, norms, classification head) exactly as
+loaded from the pretrained checkpoint.
+
+No ToMe functions are imported or called here — this is the FA-only condition.
 """
 
+import timm
 import torch
 import torch.nn as nn
+from flash_attn import flash_attn_func
 
 
 class FlashAttentionBlock(nn.Module):
-    """Drop-in replacement for a timm ViT attention block using FlashAttention-2.
+    """Drop-in replacement for a timm ViT Attention module using FlashAttention-2.
 
-    The QKV projection weights are copied from the original timm attention
-    module; only the attention computation is replaced with flash_attn_func.
+    Reuses the existing qkv and proj weights from the original timm Attention
+    instance — no weight reinitialization occurs.
 
     Args:
-        original_attn: The timm Attention module to copy weights from.
-
-    TODO (Phase 2):
-        from flash_attn import flash_attn_func
-
-        Forward logic:
-          1. Project input x with self.qkv          → (B, N, 3, H, D)
-          2. Reshape to (B, N, H, D) for q, k, v each
-          3. out = flash_attn_func(q, k, v, dropout_p=0.0, causal=False)
-          4. Reshape out to (B, N, H*D) and apply self.proj
-        Note: flash_attn_func expects float16 / bfloat16 inputs.
-              Cast inside forward(), cast result back to original dtype.
+        original_attn: The timm Attention module whose weights are adopted.
     """
 
     def __init__(self, original_attn: nn.Module) -> None:
         super().__init__()
-        # TODO (Phase 2): copy qkv and proj weights from original_attn
-        raise NotImplementedError("Phase 2: implement FlashAttentionBlock.__init__()")
+        self.qkv       = original_attn.qkv         # Linear(C, 3*C)
+        self.proj      = original_attn.proj         # Linear(C, C)
+        self.num_heads: int = original_attn.num_heads
+        # head_dim derived from QKV weight: out_features = 3 * num_heads * head_dim
+        self.head_dim: int = (
+            original_attn.qkv.weight.shape[0] // (3 * self.num_heads)
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
+        """FlashAttention-2 forward pass.
+
         Args:
-            x: Input tensor of shape (B, N, C).
+            x: (B, N, C) input tensor.
 
         Returns:
-            Output tensor of shape (B, N, C).
-
-        TODO (Phase 2): implement FlashAttention-2 forward pass.
+            (B, N, C) output tensor, matching the original Attention.forward() contract.
         """
-        raise NotImplementedError("Phase 2: implement FlashAttentionBlock.forward()")
+        B, N, C = x.shape
+
+        # Project to Q, K, V and reshape to (B, N, 3, H, D)
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim)
+
+        # flash_attn_func expects (B, N, H, D) — unbind along dim 2
+        q, k, v = qkv.unbind(2)   # each: (B, N, num_heads, head_dim)
+
+        # flash_attn_func handles 1/sqrt(d) scaling internally
+        out = flash_attn_func(q, k, v, dropout_p=0.0, causal=False)  # (B, N, H, D)
+
+        out = out.reshape(B, N, C)
+        return self.proj(out)
 
 
 def load_flash_model(device: str = "cuda") -> nn.Module:
-    """Load DeiT-B/16 with all attention blocks replaced by FlashAttentionBlock.
+    """Load DeiT-B/16 with all 12 attention blocks replaced by FlashAttentionBlock.
+
+    Weights are loaded from the pretrained timm checkpoint and the QKV / proj
+    parameters are shared with the new FlashAttentionBlock instances (no copy,
+    no reinitialization).
+
+    A forward-pass sanity check on a dummy input is run before returning.
 
     Args:
-        device: Target device string.
+        device: Target device string (e.g. 'cuda').
 
     Returns:
-        Model in eval mode with FlashAttention-2 attention blocks.
+        Model in eval mode on *device* in bfloat16.
 
-    TODO (Phase 2):
-        from models.baseline import load_baseline_model
-        model = load_baseline_model(device=device)
-        for block in model.blocks:
-            block.attn = FlashAttentionBlock(block.attn)
-        return model
+    Raises:
+        AssertionError: If the sanity-check output shape is not (1, 1000).
     """
-    raise NotImplementedError("Phase 2: implement load_flash_model()")
+    model: nn.Module = timm.create_model(
+        "deit_base_patch16_224",
+        pretrained=True,
+    )
+    model.eval()
+    model.to(device)
+    model.to(torch.bfloat16)
+
+    # Replace every block's .attn module in-place — no tome calls, ever.
+    for block in model.blocks:
+        block.attn = FlashAttentionBlock(block.attn)
+
+    print(f"FlashAttentionBlock patched into all {len(model.blocks)} transformer blocks.")
+
+    # Sanity check: single forward pass on a dummy input
+    dummy = torch.randn(1, 3, 224, 224, dtype=torch.bfloat16, device=device)
+    with torch.no_grad():
+        out = model(dummy)
+
+    assert out.shape == (1, 1000), (
+        f"Sanity check FAILED: expected output shape (1, 1000), got {tuple(out.shape)}"
+    )
+    print("Sanity check PASSED: output shape (1, 1000) confirmed.")
+
+    return model
