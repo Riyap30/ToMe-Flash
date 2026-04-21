@@ -1,0 +1,7 @@
+{
+  "label": "baseline",
+  "correct": 40875,
+  "total": 50000,
+  "top1_accuracy": 0.8175,
+  "top1_proportion": 0.8175
+}

@@ -46,7 +46,7 @@ def run_accuracy_eval(
 
     with torch.no_grad():
         for batch_idx, (images, targets) in enumerate(loader):
-            images  = images.to(device, non_blocking=True)
+            images  = images.to(device, dtype=torch.bfloat16, non_blocking=True)
             targets = targets.to(device, non_blocking=True)
 
             outputs  = model(images)                    # (B, 1000)

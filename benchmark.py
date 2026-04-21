@@ -61,7 +61,7 @@ def run_benchmark(
             except StopIteration:
                 loader_iter = iter(loader)
                 images, _ = next(loader_iter)
-            images = images.to(device, non_blocking=True)
+            images = images.to(device, dtype=torch.bfloat16, non_blocking=True)
             _ = model(images)
     torch.cuda.synchronize(device)
 
@@ -78,7 +78,7 @@ def run_benchmark(
                 loader_iter = iter(loader)
                 images, _ = next(loader_iter)
 
-            images = images.to(device, non_blocking=True)
+            images = images.to(device, dtype=torch.bfloat16, non_blocking=True)
             actual_batch = images.size(0)
 
             # Reset peak memory counter before this trial

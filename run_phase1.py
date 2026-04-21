@@ -33,6 +33,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num_workers", type=int,  default=8,      help="DataLoader workers (default: 8)")
     parser.add_argument("--fast",        action="store_true",       help="Smoke-test with only 10 batches")
     parser.add_argument("--device",      type=str,  default="cuda", help="Compute device (default: cuda)")
+    parser.add_argument("--n_warmup",    type=int,  default=100,    help="Warm-up batches (default: 100)")
+    parser.add_argument("--n_trials",    type=int,  default=100,    help="Timed trial batches (default: 100)")
     return parser.parse_args()
 
 
@@ -94,8 +96,8 @@ def main() -> None:
             batch_size=args.batch_size,
             num_workers=args.num_workers,
         )
-        n_warmup  = 30
-        n_trials  = 30
+        n_warmup  = args.n_warmup
+        n_trials  = args.n_trials
 
     print(f"DataLoader: {len(loader)} batches, batch_size={args.batch_size}, "
           f"num_workers={args.num_workers}\n")

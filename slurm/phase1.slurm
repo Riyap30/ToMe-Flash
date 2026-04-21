@@ -35,7 +35,7 @@ singularity exec \
         source /ext3/env.sh
         conda activate /ext3/env
         cd /scratch/rsp9219/project
-        python run_phase1.py --batch_size 64 --num_workers 8
+        python run_phase1.py --batch_size 256 --num_workers 8 --n_warmup 100 --n_trials 100
     "
 
 echo "---"

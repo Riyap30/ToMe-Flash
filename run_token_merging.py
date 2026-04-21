@@ -42,7 +42,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num_workers",   type=int,  default=8,      help="DataLoader workers (default: 8)")
     parser.add_argument("--fast",          action="store_true",       help="Smoke-test with only 10 batches")
     parser.add_argument("--device",        type=str,  default="cuda", help="Compute device (default: cuda)")
+    parser.add_argument("--n_warmup",      type=int,  default=100,    help="Warm-up batches per condition (default: 100)")
+    parser.add_argument("--n_trials",      type=int,  default=100,    help="Timed trial batches per condition (default: 100)")
     parser.add_argument("--skip_accuracy", action="store_true",       help="Skip 50K accuracy eval")
+    parser.add_argument("--skip_r0_check", action="store_true",       help="Skip r=0 sanity check")
     return parser.parse_args()
 
 
@@ -147,6 +150,125 @@ def print_final_summary(sweep_entries: list, recommended_r: int) -> None:
     print()
 
 
+def run_r0_sanity_check(args: argparse.Namespace, baseline_bench: dict) -> None:
+    """Verify that ToMe with r=0 is numerically equivalent to the unpatched baseline.
+
+    Runs three checks:
+      1. Logit agreement  — same batch, max absolute diff must be < 1e-2
+      2. Throughput parity — r=0 throughput within 5% of saved baseline
+      3. Accuracy parity  — top-1 on a 20-batch mini-eval within 0.1% of baseline
+
+    Raises AssertionError with a descriptive message if any check fails, which
+    causes the caller to abort before the main r-value sweep.
+
+    Args:
+        args:           Parsed CLI arguments (device, batch_size, num_workers).
+        baseline_bench: Loaded baseline benchmark dict (keys: mean_throughput, …).
+    """
+    from models.baseline import load_baseline_model
+    from models.tome_only import load_tome_model
+    from data.imagenet_loader import get_fast_loader
+    from benchmark import run_benchmark
+    from evaluate import run_accuracy_eval
+
+    print()
+    print("=" * 60)
+    print("r=0 Sanity Check  (ToMe patch must not alter outputs at r=0)")
+    print("=" * 60)
+
+    model_base = load_baseline_model(device=args.device)
+    model_r0   = load_tome_model(r=0, device=args.device)
+
+    # ------------------------------------------------------------------ 1. logits
+    single_loader = get_fast_loader(
+        max_batches=1, batch_size=args.batch_size, num_workers=args.num_workers,
+    )
+    images, _ = next(iter(single_loader))
+    images = images.to(args.device, dtype=torch.bfloat16, non_blocking=True)
+
+    with torch.no_grad():
+        logits_base = model_base(images)
+        logits_r0   = model_r0(images)
+
+    max_abs_diff = (logits_base - logits_r0).abs().max().item()
+    assert torch.allclose(logits_base, logits_r0, rtol=1e-2, atol=1e-2), (
+        f"SANITY FAIL [logits]: r=0 logits diverge from unpatched baseline. "
+        f"Max absolute difference: {max_abs_diff:.6f} (tolerance 1e-2). "
+        "The ToMe patch introduces numerical error even at r=0 — "
+        "all ToMe results are suspect. Aborting sweep."
+    )
+    print(f"  [PASS] Logit check        : max |diff| = {max_abs_diff:.2e}  (tol 1e-2)")
+
+    # ------------------------------------------------------------------ 2. throughput
+    n_warmup_sc = 5
+    n_trials_sc = 10
+    bench_loader = get_fast_loader(
+        max_batches=20, batch_size=args.batch_size, num_workers=args.num_workers,
+    )
+    r0_bench = run_benchmark(
+        model=model_r0,
+        loader=bench_loader,
+        device=args.device,
+        n_warmup=n_warmup_sc,
+        n_trials=n_trials_sc,
+        label="sanity_r0_bench",
+    )
+
+    baseline_tp = baseline_bench["mean_throughput"]
+    r0_tp       = r0_bench["mean_throughput"]
+    tp_deviation = abs(r0_tp - baseline_tp) / baseline_tp
+
+    assert tp_deviation <= 0.05, (
+        f"SANITY FAIL [throughput]: r=0 throughput ({r0_tp:.1f} img/s) deviates "
+        f"{tp_deviation:.1%} from baseline ({baseline_tp:.1f} img/s), exceeding the "
+        "5% tolerance. Unexpected overhead from the ToMe patch at r=0. Aborting sweep."
+    )
+    print(
+        f"  [PASS] Throughput check   : r=0 = {r0_tp:.1f}  baseline = {baseline_tp:.1f}"
+        f"  deviation = {tp_deviation:.1%}  (tol 5%)"
+    )
+
+    # ------------------------------------------------------------------ 3. accuracy
+    mini_batches = 20
+    acc_loader_base = get_fast_loader(
+        max_batches=mini_batches, batch_size=args.batch_size, num_workers=args.num_workers,
+    )
+    acc_loader_r0 = get_fast_loader(
+        max_batches=mini_batches, batch_size=args.batch_size, num_workers=args.num_workers,
+    )
+
+    base_acc = run_accuracy_eval(
+        model=model_base, loader=acc_loader_base,
+        device=args.device, label="sanity_base_acc",
+    )
+    r0_acc = run_accuracy_eval(
+        model=model_r0, loader=acc_loader_r0,
+        device=args.device, label="sanity_r0_acc",
+    )
+
+    acc_diff = abs(base_acc["top1_accuracy"] - r0_acc["top1_accuracy"])
+    assert acc_diff <= 0.001, (
+        f"SANITY FAIL [accuracy]: r=0 top-1 ({r0_acc['top1_accuracy']:.4f}) differs "
+        f"from baseline ({base_acc['top1_accuracy']:.4f}) by {acc_diff:.4f}, "
+        "exceeding the 0.1% tolerance. The ToMe patch changes predictions at r=0. "
+        "Aborting sweep."
+    )
+    print(
+        f"  [PASS] Accuracy check     : r=0 = {r0_acc['top1_accuracy']:.4f}"
+        f"  baseline = {base_acc['top1_accuracy']:.4f}"
+        f"  |diff| = {acc_diff:.4f}  (tol 0.001)"
+    )
+
+    print()
+    print("r=0 sanity check PASSED — ToMe patch is transparent at r=0.")
+    print("=" * 60)
+    print()
+
+    del model_base, model_r0
+    if args.device.startswith("cuda"):
+        torch.cuda.empty_cache()
+
+
 def main() -> None:
     args = parse_args()
     os.makedirs(RESULTS_DIR, exist_ok=True)
@@ -155,6 +277,12 @@ def main() -> None:
 
     # ------------------------------------------------------------------ baseline
     baseline_bench, baseline_acc = load_baseline_results(RESULTS_DIR)
+
+    # ------------------------------------------------------------------ r=0 sanity check
+    if not args.skip_r0_check:
+        run_r0_sanity_check(args, baseline_bench)
+    else:
+        print("[skip_r0_check] Skipping r=0 sanity check.")
 
     # ------------------------------------------------------------------ data loader
     from data.imagenet_loader import get_imagenet_val_loader, get_fast_loader
@@ -165,6 +293,10 @@ def main() -> None:
     if args.fast:
         print("[FAST MODE] Using only 10 batches per condition.")
         n_warmup, n_trials = 3, 10
+    else:
+        n_warmup, n_trials = args.n_warmup, args.n_trials
+
+    print(f"Benchmark config: {n_warmup} warmup + {n_trials} timed trials per condition.")
 
     sweep_entries = []
 
@@ -190,16 +322,13 @@ def main() -> None:
                 batch_size=args.batch_size, num_workers=args.num_workers,
             )
 
-        bench_kwargs = {}
-        if args.fast:
-            bench_kwargs = {"n_warmup": n_warmup, "n_trials": n_trials}
-
         tome_bench = run_benchmark(
             model=model,
             loader=bench_loader,
             device=args.device,
+            n_warmup=n_warmup,
+            n_trials=n_trials,
             label=f"tome_r{r}",
-            **bench_kwargs,
         )
 
         # ---- accuracy --------------------------------------------------

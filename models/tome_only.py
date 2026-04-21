@@ -15,6 +15,7 @@ from typing import Dict
 
 import timm
 import tome
+import torch
 import torch.nn as nn
 
 
@@ -35,6 +36,7 @@ def load_tome_model(r: int, device: str = "cuda") -> nn.Module:
     )
     model.eval()
     model.to(device)
+    model.to(torch.bfloat16)
 
     # Patch in-place; must be called on a fresh model each time.
     # r is set as a model attribute after patching — not a patch.timm() argument.

@@ -35,8 +35,10 @@ echo "[slurm] Python: $(which python)"
 echo "[slurm] tome check: $(python -c 'import tome; print(tome.__file__)' 2>&1)"
 python -u run_token_merging.py \
     --r_values 4 8 12 14 16 \
-    --batch_size 64 \
-    --num_workers 8
+    --batch_size 256 \
+    --num_workers 8 \
+    --n_warmup 100 \
+    --n_trials 100
 SINGEOF
 
 SING_EXIT=$?

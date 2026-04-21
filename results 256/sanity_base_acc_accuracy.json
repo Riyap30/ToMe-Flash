@@ -1,0 +1,7 @@
+{
+  "label": "sanity_base_acc",
+  "correct": 1201,
+  "total": 1280,
+  "top1_accuracy": 0.93828125,
+  "top1_proportion": 0.93828125
+}

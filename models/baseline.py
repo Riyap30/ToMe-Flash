@@ -26,6 +26,7 @@ def load_baseline_model(device: str = "cuda") -> nn.Module:
     )
     model.eval()
     model.to(device)
+    model.to(torch.bfloat16)
     return model
 
 
