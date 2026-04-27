@@ -3,7 +3,7 @@ run_combined.py
 
 Phase 4: ToMe + FlashAttention-2 combined DeiT-B/16 benchmark on ImageNet-1K val.
 
-Runs throughput + peak-VRAM benchmark and top-1 accuracy evaluation for the
+Runs throughput + peak-VRAM benchmark and top-1/top-5 accuracy evaluation for the
 combined condition, then performs pairwise statistical comparisons against all
 three prior conditions (baseline, ToMe-only r=8, FA-only) and prints a
 consolidated four-condition results table.
@@ -170,7 +170,6 @@ def print_consolidated_table(
     flash_acc:      Dict[str, Any],
     combined_bench: Dict[str, Any],
     combined_acc:   Dict[str, Any],
-    stats:          Dict[str, Any],
 ) -> None:
     """Print a single consolidated four-condition table with significance flags."""
     from stats import compare_throughput, compare_memory, compare_accuracy
@@ -181,7 +180,6 @@ def print_consolidated_table(
     print("Phase 4 — Consolidated Results: Baseline | ToMe r=8 | FA-only | Combined")
     print("=" * W)
 
-    # Column headers
     print(
         f"  {'Condition':<14}  {'Throughput (img/s)':>20}  "
         f"{'Peak VRAM (GB)':>16}  {'Top-1 Acc':>10}  {'vs Baseline':>12}"
@@ -196,16 +194,16 @@ def print_consolidated_table(
     ]
 
     for name, bench, acc in rows:
-        tp  = f"{bench['mean_throughput']:>7.1f} ± {bench['std_throughput']:.1f}"
-        mem = f"{bench['mean_memory']:>6.3f} ± {bench['std_memory']:.3f}"
+        tp   = f"{bench['mean_throughput']:>7.1f} ± {bench['std_throughput']:.1f}"
+        mem  = f"{bench['mean_memory']:>6.3f} ± {bench['std_memory']:.3f}"
         top1 = f"{acc['top1_accuracy']:.4f}"
 
         if name == "Baseline":
             vs = "—"
         else:
-            tp_s  = compare_throughput(baseline_bench, bench)
-            sig   = "*" if tp_s["significant"] else " "
-            vs    = f"{tp_s['improvement_pct']:+.1f}%{sig}"
+            tp_s = compare_throughput(baseline_bench, bench)
+            sig  = "*" if tp_s["significant"] else " "
+            vs   = f"{tp_s['improvement_pct']:+.1f}%{sig}"
 
         print(f"  {name:<14}  {tp:>20}  {mem:>16}  {top1:>10}  {vs:>12}")
 
@@ -225,11 +223,11 @@ def print_consolidated_table(
         tp_s  = compare_throughput(b_a, b_b)
         mem_s = compare_memory(b_a, b_b)
         acc_s = compare_accuracy(a_a, a_b)
-        sig_tp  = f"p={tp_s['p_value']:.4f}{'*' if tp_s['significant'] else ''}"
+        sig_tp  = f"p={tp_s['p_value']:.4f}{'*' if tp_s['significant'] else ''}  g={tp_s['effect_size']:.2f}"
         sig_mem = f"p={mem_s['p_value']:.4f}{'*' if mem_s['significant'] else ''}"
         sig_acc = f"p={acc_s['p_value']:.4f}{'*' if acc_s['significant'] else ''}"
         print(
-            f"  {desc:<28}  tp: {sig_tp:<12}  "
+            f"  {desc:<28}  tp: {sig_tp:<20}  "
             f"mem: {sig_mem:<12}  acc: {sig_acc}"
         )
     print()
@@ -257,33 +255,42 @@ def main() -> None:
 
     if args.fast:
         print(f"[FAST MODE] Using only 10 batches (batch_size={args.batch_size}).")
-        n_warmup = 3
-        n_trials = 10
+        n_warmup     = 3
+        n_trials     = 10
         bench_loader = get_fast_loader(
-            max_batches=10,
-            batch_size=args.batch_size,
-            num_workers=args.num_workers,
+            max_batches=10, batch_size=args.batch_size, num_workers=args.num_workers,
         )
-        acc_loader = get_fast_loader(
-            max_batches=10,
-            batch_size=args.batch_size,
-            num_workers=args.num_workers,
+        acc_loader   = get_fast_loader(
+            max_batches=10, batch_size=args.batch_size, num_workers=args.num_workers,
         )
     else:
-        n_warmup = args.n_warmup
-        n_trials = args.n_trials
+        n_warmup     = args.n_warmup
+        n_trials     = args.n_trials
         bench_loader = get_imagenet_val_loader(
-            batch_size=args.batch_size,
-            num_workers=args.num_workers,
+            batch_size=args.batch_size, num_workers=args.num_workers,
         )
-        acc_loader = get_imagenet_val_loader(
-            batch_size=args.batch_size,
-            num_workers=args.num_workers,
+        acc_loader   = get_imagenet_val_loader(
+            batch_size=args.batch_size, num_workers=args.num_workers,
         )
 
     print(
         f"DataLoader: {len(bench_loader)} batches, "
         f"batch_size={args.batch_size}, num_workers={args.num_workers}\n"
+    )
+
+    # ------------------------------------------------------------------
+    # Reproducibility metadata
+    # ------------------------------------------------------------------
+    from meta import build_metadata
+
+    meta = build_metadata(
+        script_name="run_combined.py",
+        args_dict=vars(args),
+        device=args.device,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        n_warmup=n_warmup,
+        n_trials=n_trials,
     )
 
     # ------------------------------------------------------------------
@@ -298,6 +305,7 @@ def main() -> None:
         n_warmup=n_warmup,
         n_trials=n_trials,
         label=LABEL,
+        metadata=meta,
     )
 
     # ------------------------------------------------------------------
@@ -310,6 +318,7 @@ def main() -> None:
         loader=acc_loader,
         device=args.device,
         label=LABEL,
+        metadata=meta,
     )
 
     # ------------------------------------------------------------------
@@ -331,19 +340,19 @@ def main() -> None:
     print_stats_table(flash_bench, flash_acc, combined_bench, combined_acc, f"{LABEL} vs flash_only")
 
     # ------------------------------------------------------------------
-    # Consolidated four-condition table
+    # Compute all pairwise stats
     # ------------------------------------------------------------------
-    tp_vs_base  = compare_throughput(baseline_bench, combined_bench)
-    mem_vs_base = compare_memory(baseline_bench, combined_bench)
-    acc_vs_base = compare_accuracy(baseline_acc, combined_acc)
+    tp_vs_base   = compare_throughput(baseline_bench, combined_bench)
+    mem_vs_base  = compare_memory(baseline_bench,    combined_bench)
+    acc_vs_base  = compare_accuracy(baseline_acc,    combined_acc)
 
-    tp_vs_tome  = compare_throughput(tome_bench, combined_bench)
-    mem_vs_tome = compare_memory(tome_bench, combined_bench)
-    acc_vs_tome = compare_accuracy(tome_acc, combined_acc)
+    tp_vs_tome   = compare_throughput(tome_bench,  combined_bench)
+    mem_vs_tome  = compare_memory(tome_bench,      combined_bench)
+    acc_vs_tome  = compare_accuracy(tome_acc,      combined_acc)
 
     tp_vs_flash  = compare_throughput(flash_bench, combined_bench)
-    mem_vs_flash = compare_memory(flash_bench, combined_bench)
-    acc_vs_flash = compare_accuracy(flash_acc, combined_acc)
+    mem_vs_flash = compare_memory(flash_bench,     combined_bench)
+    acc_vs_flash = compare_accuracy(flash_acc,     combined_acc)
 
     phase4_stats = {
         "experiment": "combined_vs_all",
@@ -365,6 +374,7 @@ def main() -> None:
                 **acc_vs_base,
                 "baseline_top1": baseline_acc["top1_accuracy"],
                 "combined_top1": combined_acc["top1_accuracy"],
+                "combined_top5": combined_acc.get("top5_accuracy"),
             },
         },
         "combined_vs_tome_r8": {
@@ -377,6 +387,7 @@ def main() -> None:
             "memory":     {**mem_vs_flash},
             "accuracy":   {**acc_vs_flash},
         },
+        "metadata": meta,
     }
 
     stats_path = os.path.join(RESULTS_DIR, "phase4_stats.json")
@@ -392,7 +403,6 @@ def main() -> None:
         tome_bench,     tome_acc,
         flash_bench,    flash_acc,
         combined_bench, combined_acc,
-        phase4_stats,
     )
 
     # ------------------------------------------------------------------
@@ -420,20 +430,21 @@ def main() -> None:
         f"  ({combined_acc['correct']}/{combined_acc['total']})"
         f"  ({acc_vs_base['diff_pct']:+.2f} pp vs baseline)"
     )
+    print(f"  Top-5 acc  : {combined_acc.get('top5_accuracy', float('nan')):.4f}")
     print()
     print("Statistical significance (α = 0.05, vs baseline):")
-    print(f"  Throughput : {sig(tp_vs_base)}")
-    print(f"  Memory     : {sig(mem_vs_base)}")
+    print(f"  Throughput : {sig(tp_vs_base)}  g={tp_vs_base['effect_size']:.3f} [{tp_vs_base['practical_interpretation']}]")
+    print(f"  Memory     : {sig(mem_vs_base)}  g={mem_vs_base['effect_size']:.3f} [{mem_vs_base['practical_interpretation']}]")
     print(f"  Accuracy   : {sig(acc_vs_base)}")
     print()
     print("Additive gains (combined vs each single technique):")
     print(
         f"  vs ToMe r=8  — throughput: {tp_vs_tome['improvement_pct']:+.1f}%  "
-        f"{sig(tp_vs_tome)}"
+        f"{sig(tp_vs_tome)}  g={tp_vs_tome['effect_size']:.3f}"
     )
     print(
         f"  vs FA-only   — throughput: {tp_vs_flash['improvement_pct']:+.1f}%  "
-        f"{sig(tp_vs_flash)}"
+        f"{sig(tp_vs_flash)}  g={tp_vs_flash['effect_size']:.3f}"
     )
     print("=" * 60)
     print(f"\nPhase 4 complete. Results written to {RESULTS_DIR}/")

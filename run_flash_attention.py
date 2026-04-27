@@ -4,7 +4,7 @@ run_flash_attention.py
 FlashAttention-only entry point: FlashAttention-2-only DeiT-B/16 benchmark on ImageNet-1K.
 
 Runs the full benchmark (throughput + peak VRAM) and accuracy evaluation
-(top-1 over 50 000 val images) for the FA-only condition, then performs
+(top-1 and top-5 over 50 000 val images) for the FA-only condition, then performs
 statistical comparisons against the Phase 1 baseline results.
 
 Results saved to:
@@ -103,9 +103,6 @@ def main() -> None:
     args = parse_args()
     os.makedirs(RESULTS_DIR, exist_ok=True)
 
-    # ------------------------------------------------------------------
-    # Environment info
-    # ------------------------------------------------------------------
     print_env_info(args.device)
 
     # ------------------------------------------------------------------
@@ -124,32 +121,41 @@ def main() -> None:
 
     if args.fast:
         print(f"[FAST MODE] Using only 10 batches (batch_size={args.batch_size}).")
-        n_warmup  = 3
-        n_trials  = 10
+        n_warmup     = 3
+        n_trials     = 10
         bench_loader = get_fast_loader(
-            max_batches=10,
-            batch_size=args.batch_size,
-            num_workers=args.num_workers,
+            max_batches=10, batch_size=args.batch_size, num_workers=args.num_workers,
         )
-        acc_loader = get_fast_loader(
-            max_batches=10,
-            batch_size=args.batch_size,
-            num_workers=args.num_workers,
+        acc_loader   = get_fast_loader(
+            max_batches=10, batch_size=args.batch_size, num_workers=args.num_workers,
         )
     else:
-        n_warmup  = args.n_warmup
-        n_trials  = args.n_trials
+        n_warmup     = args.n_warmup
+        n_trials     = args.n_trials
         bench_loader = get_imagenet_val_loader(
-            batch_size=args.batch_size,
-            num_workers=args.num_workers,
+            batch_size=args.batch_size, num_workers=args.num_workers,
         )
-        acc_loader = get_imagenet_val_loader(
-            batch_size=args.batch_size,
-            num_workers=args.num_workers,
+        acc_loader   = get_imagenet_val_loader(
+            batch_size=args.batch_size, num_workers=args.num_workers,
         )
 
     print(f"DataLoader: {len(bench_loader)} batches, batch_size={args.batch_size}, "
           f"num_workers={args.num_workers}\n")
+
+    # ------------------------------------------------------------------
+    # Reproducibility metadata
+    # ------------------------------------------------------------------
+    from meta import build_metadata
+
+    meta = build_metadata(
+        script_name="run_flash_attention.py",
+        args_dict=vars(args),
+        device=args.device,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        n_warmup=n_warmup,
+        n_trials=n_trials,
+    )
 
     # ------------------------------------------------------------------
     # Benchmark (throughput + memory)
@@ -163,6 +169,7 @@ def main() -> None:
         n_warmup=n_warmup,
         n_trials=n_trials,
         label=LABEL,
+        metadata=meta,
     )
 
     # ------------------------------------------------------------------
@@ -175,6 +182,7 @@ def main() -> None:
         loader=acc_loader,
         device=args.device,
         label=LABEL,
+        metadata=meta,
     )
 
     # ------------------------------------------------------------------
@@ -198,18 +206,20 @@ def main() -> None:
     print("=" * 60)
     print(f"  Throughput : {flash_bench['mean_throughput']:.1f} ± "
           f"{flash_bench['std_throughput']:.1f}  images/sec"
-          f"  ({tp_stats['improvement_pct']:+.1f}% vs baseline)")
+          f"  ({tp_stats['improvement_pct']:+.1f}% vs baseline)"
+          f"  [effect: {tp_stats['practical_interpretation']}]")
     print(f"  Peak VRAM  : {flash_bench['mean_memory']:.3f} ± "
           f"{flash_bench['std_memory']:.3f}  GB"
           f"  ({mem_stats['improvement_pct']:+.1f}% reduction)")
     print(f"  Top-1 acc  : {flash_acc['top1_accuracy']:.4f}"
           f"  ({flash_acc['correct']}/{flash_acc['total']})"
           f"  ({acc_stats['diff_pct']:+.2f} pp vs baseline)")
+    print(f"  Top-5 acc  : {flash_acc.get('top5_accuracy', float('nan')):.4f}")
     print()
     print("Statistical significance (α = 0.05):")
     sig = lambda s, k="significant": "YES (p={:.4f})".format(s["p_value"]) if s[k] else "no  (p={:.4f})".format(s["p_value"])
-    print(f"  Throughput : {sig(tp_stats)}")
-    print(f"  Memory     : {sig(mem_stats)}")
+    print(f"  Throughput : {sig(tp_stats)}  g={tp_stats['effect_size']:.3f} [{tp_stats['practical_interpretation']}]")
+    print(f"  Memory     : {sig(mem_stats)}  g={mem_stats['effect_size']:.3f} [{mem_stats['practical_interpretation']}]")
     print(f"  Accuracy   : {sig(acc_stats)}")
     print("=" * 60)
     print()
@@ -218,9 +228,9 @@ def main() -> None:
     # Save full stats to JSON
     # ------------------------------------------------------------------
     phase3_stats = {
-        "experiment":    "flash_only_vs_baseline",
-        "label":         LABEL,
-        "alpha":         0.05,
+        "experiment": "flash_only_vs_baseline",
+        "label":      LABEL,
+        "alpha":      0.05,
         "throughput": {
             **tp_stats,
             "baseline_mean": baseline_bench["mean_throughput"],
@@ -239,7 +249,9 @@ def main() -> None:
             **acc_stats,
             "baseline_top1": baseline_acc["top1_accuracy"],
             "flash_top1":    flash_acc["top1_accuracy"],
+            "flash_top5":    flash_acc.get("top5_accuracy"),
         },
+        "metadata": meta,
     }
 
     stats_path = os.path.join(RESULTS_DIR, "phase3_stats.json")

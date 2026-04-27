@@ -13,15 +13,46 @@ CRITICAL timing note:
 
 import json
 import os
+import statistics
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
+import numpy as np
 import torch
 import torch.nn as nn
+from scipy.stats import trim_mean as _scipy_trim_mean
 from torch.utils.data import DataLoader
 
 PROJECT_ROOT: str = "/scratch/rsp9219/project"
 RESULTS_DIR: str  = os.path.join(PROJECT_ROOT, "results")
+
+
+def _robust_stats(values: List[float], prefix: str) -> Dict[str, Any]:
+    """Compute robust descriptive statistics for a list of floats.
+
+    Returns a dict of new keys prefixed with *prefix* (e.g. 'throughput'):
+      median_{prefix}, iqr_{prefix}, p5_{prefix}, p95_{prefix},
+      trimmed_mean_{prefix}, num_outliers_iqr_rule_{prefix}
+    """
+    arr = np.array(values, dtype=float)
+    q1, q3  = float(np.percentile(arr, 25)), float(np.percentile(arr, 75))
+    iqr     = q3 - q1
+    p5      = float(np.percentile(arr, 5))
+    p95     = float(np.percentile(arr, 95))
+    median  = float(np.median(arr))
+    # 10% trimmed mean (drops bottom and top 10%)
+    trimmed = float(_scipy_trim_mean(arr, 0.10))
+    # IQR rule: outlier if < Q1 - 1.5*IQR or > Q3 + 1.5*IQR
+    n_out   = int(np.sum((arr < q1 - 1.5 * iqr) | (arr > q3 + 1.5 * iqr)))
+
+    return {
+        f"median_{prefix}":                  median,
+        f"iqr_{prefix}":                     float(iqr),
+        f"p5_{prefix}":                      p5,
+        f"p95_{prefix}":                     p95,
+        f"trimmed_mean_{prefix}":            trimmed,
+        f"num_outliers_iqr_rule_{prefix}":   n_out,
+    }
 
 
 def run_benchmark(
@@ -31,6 +62,7 @@ def run_benchmark(
     n_warmup: int = 30,
     n_trials: int = 30,
     label: str = "baseline",
+    metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Run a timed inference benchmark and return per-trial statistics.
 
@@ -42,11 +74,20 @@ def run_benchmark(
         n_trials: Number of timed trials; each trial = one forward pass over
                   one batch from *loader*.
         label:    Identifier used for the output JSON filename and printed table.
+        metadata: Optional reproducibility metadata dict (from meta.build_metadata()).
+                  Stored under "metadata" key in the output JSON.
 
     Returns:
-        dict with keys:
-          label, throughputs, peak_memories, mean_throughput, std_throughput,
-          mean_memory, std_memory, batch_size, n_trials
+        dict with keys (existing keys preserved for backward compatibility):
+          label, throughputs, peak_memories,
+          mean_throughput, std_throughput, mean_memory, std_memory,
+          batch_size, n_trials,
+          elapsed_ms (per-trial list),
+          median_throughput, iqr_throughput, p5_throughput, p95_throughput,
+          trimmed_mean_throughput, num_outliers_iqr_rule_throughput,
+          median_memory, iqr_memory, p5_memory, p95_memory,
+          trimmed_mean_memory, num_outliers_iqr_rule_memory,
+          metadata (if provided)
     """
     model.eval()
     loader_iter = iter(loader)
@@ -55,7 +96,7 @@ def run_benchmark(
     # ------------------------------------------------------------------ warmup
     print(f"[{label}] Warming up ({n_warmup} batches)…")
     with torch.no_grad():
-        for i in range(n_warmup):
+        for _ in range(n_warmup):
             try:
                 images, _ = next(loader_iter)
             except StopIteration:
@@ -66,22 +107,22 @@ def run_benchmark(
     torch.cuda.synchronize(device)
 
     # ------------------------------------------------------------------ timed trials
-    throughputs: List[float] = []
+    throughputs:   List[float] = []
     peak_memories: List[float] = []
+    elapsed_ms:    List[float] = []
 
     print(f"[{label}] Running {n_trials} timed trials…")
     with torch.no_grad():
-        for trial in range(n_trials):
+        for _ in range(n_trials):
             try:
                 images, _ = next(loader_iter)
             except StopIteration:
                 loader_iter = iter(loader)
                 images, _ = next(loader_iter)
 
-            images = images.to(device, dtype=torch.bfloat16, non_blocking=True)
+            images       = images.to(device, dtype=torch.bfloat16, non_blocking=True)
             actual_batch = images.size(0)
 
-            # Reset peak memory counter before this trial
             torch.cuda.reset_peak_memory_stats(device)
 
             # Synchronize before starting the clock
@@ -95,17 +136,20 @@ def run_benchmark(
             elapsed = time.perf_counter() - t0
 
             peak_mem_gb: float = torch.cuda.max_memory_allocated(device) / 1e9
-            throughput: float  = actual_batch / elapsed
+            throughput:  float = actual_batch / elapsed
 
             throughputs.append(throughput)
             peak_memories.append(peak_mem_gb)
+            elapsed_ms.append(elapsed * 1000.0)
 
     # ------------------------------------------------------------------ statistics
-    import statistics
     mean_tp  = statistics.mean(throughputs)
     std_tp   = statistics.stdev(throughputs)
     mean_mem = statistics.mean(peak_memories)
     std_mem  = statistics.stdev(peak_memories)
+
+    robust_tp  = _robust_stats(throughputs,   "throughput")
+    robust_mem = _robust_stats(peak_memories, "memory")
 
     # ------------------------------------------------------------------ print summary
     print()
@@ -113,13 +157,16 @@ def run_benchmark(
     print(f"Benchmark results — {label}")
     print(f"{'=' * 60}")
     print(f"  Throughput : {mean_tp:>9.1f} ± {std_tp:.1f}  images/sec")
+    print(f"  Median tp  : {robust_tp['median_throughput']:>9.1f}  (IQR {robust_tp['iqr_throughput']:.1f})")
+    print(f"  P5 / P95   : {robust_tp['p5_throughput']:.1f} / {robust_tp['p95_throughput']:.1f}")
     print(f"  Peak VRAM  : {mean_mem:>9.3f} ± {std_mem:.3f}  GB")
     print(f"  Batch size : {batch_size}")
-    print(f"  Trials     : {n_trials}")
+    print(f"  Trials     : {n_trials}  ({robust_tp['num_outliers_iqr_rule_throughput']} throughput outliers by IQR rule)")
     print(f"{'=' * 60}")
     print()
 
     result: Dict[str, Any] = {
+        # --- existing keys (unchanged) ---
         "label":           label,
         "throughputs":     throughputs,
         "peak_memories":   peak_memories,
@@ -129,7 +176,14 @@ def run_benchmark(
         "std_memory":      std_mem,
         "batch_size":      batch_size,
         "n_trials":        n_trials,
+        # --- new keys ---
+        "elapsed_ms":      elapsed_ms,
+        **robust_tp,
+        **robust_mem,
     }
+
+    if metadata is not None:
+        result["metadata"] = metadata
 
     # ------------------------------------------------------------------ save JSON
     os.makedirs(RESULTS_DIR, exist_ok=True)

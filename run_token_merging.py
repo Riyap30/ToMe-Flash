@@ -10,8 +10,9 @@ For each r value this script:
   4. Runs Welch's t-test and two-proportion z-test vs the validated baseline
   5. Prints per-r statistics table
 
-After all r values, prints a combined summary table and writes
-results/tome_sweep_summary.json.
+After all r values, applies Benjamini-Hochberg FDR correction across all
+sweep p-values (throughput and accuracy separately), prints a combined
+summary table, and writes results/tome_sweep_summary.json.
 
 Usage:
     python run_token_merging.py [--r_values 4 8 16] [--batch_size 64]
@@ -102,28 +103,44 @@ def load_baseline_results(results_dir: str) -> tuple:
     return baseline_bench, baseline_acc
 
 
-def _select_recommended_r(sweep_entries: list) -> int:
+def _select_recommended_r(sweep_entries: list, use_corrected: bool = True) -> int:
     """Return the recommended r value.
 
     Rule: largest r where accuracy_drop_pct < 1.0 AND throughput improvement
-    is statistically significant (p < 0.05).
-    Fallback: r with minimum accuracy drop if none satisfy the accuracy constraint.
+    is statistically significant.
+
+    When use_corrected=True (default) uses BH-corrected significance
+    (significant_adj); falls back to raw significant if the corrected field
+    is absent.
+
+    Fallback: r with minimum accuracy drop if none satisfy the accuracy
+    constraint.
     """
+    def _sig(e: dict) -> bool:
+        if use_corrected and "significant_adj" in e:
+            return e["significant_adj"]
+        return e["significant"]
+
     qualifying = [
         e for e in sweep_entries
-        if e["accuracy_drop_pct"] < 1.0 and e["significant"]
+        if e.get("accuracy_drop_pct") is not None
+        and e["accuracy_drop_pct"] < 1.0
+        and _sig(e)
     ]
     if qualifying:
         return max(qualifying, key=lambda e: e["r"])["r"]
     # fallback
-    return min(sweep_entries, key=lambda e: e["accuracy_drop_pct"])["r"]
+    valid = [e for e in sweep_entries if e.get("accuracy_drop_pct") is not None]
+    if valid:
+        return min(valid, key=lambda e: e["accuracy_drop_pct"])["r"]
+    return sweep_entries[0]["r"]
 
 
 def print_final_summary(sweep_entries: list, recommended_r: int) -> None:
     """Print a combined summary table for all r values."""
     header = (
         f"{'':>2}  {'r':>2}  {'tokens':>6}  {'thrpt':>8}  {'±':>6}  "
-        f"{'vs base':>8}  {'p-val':>7}  {'sig':>3}  {'top-1':>6}  {'acc drop':>9}"
+        f"{'vs base':>8}  {'p-val':>7}  {'p-adj':>7}  {'sig*':>4}  {'top-1':>6}  {'acc drop':>9}"
     )
     sep = "-" * len(header)
     print()
@@ -133,18 +150,21 @@ def print_final_summary(sweep_entries: list, recommended_r: int) -> None:
     print(header)
     print(sep)
     for e in sweep_entries:
-        marker = "→" if e["r"] == recommended_r else "  "
-        sig    = " * " if e["significant"] else "   "
-        acc    = f"{e['top1_accuracy']:.4f}" if e["top1_accuracy"] is not None else "  N/A "
-        drop   = f"{e['accuracy_drop_pct']:+.2f}%" if e["accuracy_drop_pct"] is not None else "   N/A "
+        marker  = "→" if e["r"] == recommended_r else "  "
+        sig_raw = "*" if e["significant"] else " "
+        sig_adj = "*" if e.get("significant_adj", False) else " "
+        sig_col = f"{sig_raw}/{sig_adj}"
+        p_adj   = f"{e['p_value_adj']:.4f}" if e.get("p_value_adj") is not None else "  N/A "
+        acc     = f"{e['top1_accuracy']:.4f}" if e["top1_accuracy"] is not None else "  N/A "
+        drop    = f"{e['accuracy_drop_pct']:+.2f}%" if e["accuracy_drop_pct"] is not None else "   N/A "
         print(
             f"{marker}  {e['r']:>2}  {e['final_tokens']:>6}  "
             f"{e['mean_throughput']:>8.1f}  {e['std_throughput']:>6.3f}  "
             f"{e['throughput_improvement_pct']:>+7.1f}%  "
-            f"{e['p_value']:>7.4f}  {sig}  {acc}  {drop}"
+            f"{e['p_value']:>7.4f}  {p_adj:>7}  {sig_col:>4}  {acc}  {drop}"
         )
     print(sep)
-    print(f"→ = recommended r  |  * = p < 0.05  |  α = 0.05 (pre-registered)")
+    print(f"→ = recommended r  |  sig* = raw/BH-corrected  |  α = 0.05 (pre-registered)")
     print(f"Recommended r: {recommended_r}")
     print("=" * len(header))
     print()
@@ -155,7 +175,7 @@ def run_r0_sanity_check(args: argparse.Namespace, baseline_bench: dict) -> None:
 
     Runs three checks:
       1. Logit agreement  — same batch, max absolute diff must be < 1e-2
-      2. Throughput parity — r=0 throughput within 5% of saved baseline
+      2. Throughput parity — r=0 throughput within 5% of same-session baseline
       3. Accuracy parity  — top-1 on a 20-batch mini-eval within 0.1% of baseline
 
     Raises AssertionError with a descriptive message if any check fails, which
@@ -202,30 +222,48 @@ def run_r0_sanity_check(args: argparse.Namespace, baseline_bench: dict) -> None:
     # ------------------------------------------------------------------ 2. throughput
     n_warmup_sc = 5
     n_trials_sc = 10
-    bench_loader = get_fast_loader(
+    bench_loader_base = get_fast_loader(
+        max_batches=20, batch_size=args.batch_size, num_workers=args.num_workers,
+    )
+    base_bench_sc = run_benchmark(
+        model=model_base,
+        loader=bench_loader_base,
+        device=args.device,
+        n_warmup=n_warmup_sc,
+        n_trials=n_trials_sc,
+        label="sanity_base_bench",
+    )
+
+    bench_loader_r0 = get_fast_loader(
         max_batches=20, batch_size=args.batch_size, num_workers=args.num_workers,
     )
     r0_bench = run_benchmark(
         model=model_r0,
-        loader=bench_loader,
+        loader=bench_loader_r0,
         device=args.device,
         n_warmup=n_warmup_sc,
         n_trials=n_trials_sc,
         label="sanity_r0_bench",
     )
 
-    baseline_tp = baseline_bench["mean_throughput"]
-    r0_tp       = r0_bench["mean_throughput"]
+    baseline_tp  = base_bench_sc["mean_throughput"]
+    r0_tp        = r0_bench["mean_throughput"]
     tp_deviation = abs(r0_tp - baseline_tp) / baseline_tp
 
     assert tp_deviation <= 0.05, (
         f"SANITY FAIL [throughput]: r=0 throughput ({r0_tp:.1f} img/s) deviates "
-        f"{tp_deviation:.1%} from baseline ({baseline_tp:.1f} img/s), exceeding the "
+        f"{tp_deviation:.1%} from same-session baseline ({baseline_tp:.1f} img/s), "
+        "exceeding the "
         "5% tolerance. Unexpected overhead from the ToMe patch at r=0. Aborting sweep."
     )
     print(
-        f"  [PASS] Throughput check   : r=0 = {r0_tp:.1f}  baseline = {baseline_tp:.1f}"
+        f"  [PASS] Throughput check   : r=0 = {r0_tp:.1f}"
+        f"  same-session baseline = {baseline_tp:.1f}"
         f"  deviation = {tp_deviation:.1%}  (tol 5%)"
+    )
+    print(
+        f"                          saved baseline reference = "
+        f"{baseline_bench['mean_throughput']:.1f} img/s"
     )
 
     # ------------------------------------------------------------------ 3. accuracy
@@ -284,11 +322,15 @@ def main() -> None:
     else:
         print("[skip_r0_check] Skipping r=0 sanity check.")
 
-    # ------------------------------------------------------------------ data loader
+    # ------------------------------------------------------------------ imports
     from data.imagenet_loader import get_imagenet_val_loader, get_fast_loader
     from benchmark import run_benchmark
     from evaluate import run_accuracy_eval
-    from stats import compare_throughput, compare_memory, compare_accuracy, print_stats_table
+    from stats import (
+        compare_throughput, compare_memory, compare_accuracy,
+        print_stats_table, bh_correction,
+    )
+    from meta import build_metadata
 
     if args.fast:
         print("[FAST MODE] Using only 10 batches per condition.")
@@ -312,6 +354,17 @@ def main() -> None:
         model = load_tome_model(r=r, device=args.device)
         get_tome_info(model, r)
 
+        # ---- metadata --------------------------------------------------
+        meta = build_metadata(
+            script_name="run_token_merging.py",
+            args_dict=vars(args),
+            device=args.device,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers,
+            n_warmup=n_warmup,
+            n_trials=n_trials,
+        )
+
         # ---- benchmark -------------------------------------------------
         if args.fast:
             bench_loader = get_fast_loader(
@@ -329,6 +382,7 @@ def main() -> None:
             n_warmup=n_warmup,
             n_trials=n_trials,
             label=f"tome_r{r}",
+            metadata=meta,
         )
 
         # ---- accuracy --------------------------------------------------
@@ -347,6 +401,7 @@ def main() -> None:
                 loader=acc_loader,
                 device=args.device,
                 label=f"tome_r{r}",
+                metadata=meta,
             )
 
         # ---- statistics ------------------------------------------------
@@ -362,7 +417,6 @@ def main() -> None:
         if tome_acc is not None:
             print_stats_table(baseline_bench, baseline_acc, tome_bench, tome_acc, f"tome_r{r}")
         else:
-            # Throughput + memory only
             _print_partial_stats(tp_stats, mem_stats, r)
 
         # Statistical significance vs practical significance note
@@ -386,19 +440,21 @@ def main() -> None:
             acc_pval = acc_stats["p_value"]
 
         sweep_entries.append({
-            "r":                         r,
-            "final_tokens":              197 - r * 12,
-            "reduction_pct":             round((r * 12 / 197) * 100, 1),
-            "mean_throughput":           tome_bench["mean_throughput"],
-            "std_throughput":            tome_bench["std_throughput"],
+            "r":                          r,
+            "final_tokens":               197 - r * 12,
+            "reduction_pct":              round((r * 12 / 197) * 100, 1),
+            "mean_throughput":            tome_bench["mean_throughput"],
+            "std_throughput":             tome_bench["std_throughput"],
             "throughput_improvement_pct": tp_stats["improvement_pct"],
-            "t_stat":                    tp_stats["t_stat"],
-            "p_value":                   tp_stats["p_value"],
-            "significant":               tp_stats["significant"],
-            "top1_accuracy":             top1,
-            "accuracy_drop_pct":         acc_drop,
-            "z_stat":                    z_stat,
-            "acc_p_value":               acc_pval,
+            "t_stat":                     tp_stats["t_stat"],
+            "p_value":                    tp_stats["p_value"],
+            "significant":                tp_stats["significant"],
+            "effect_size":                tp_stats["effect_size"],
+            "practical_interpretation":   tp_stats["practical_interpretation"],
+            "top1_accuracy":              top1,
+            "accuracy_drop_pct":          acc_drop,
+            "z_stat":                     z_stat,
+            "acc_p_value":                acc_pval,
         })
 
         # Free GPU memory before next model load
@@ -406,10 +462,30 @@ def main() -> None:
         if args.device.startswith("cuda"):
             torch.cuda.empty_cache()
 
+    # ------------------------------------------------------------------ BH correction
+    # Apply BH FDR correction separately for throughput and accuracy p-values.
+    tp_p_values = [e["p_value"] for e in sweep_entries]
+    bh_tp       = bh_correction(tp_p_values)
+    for e, p_adj, sig_adj in zip(
+        sweep_entries,
+        bh_tp["p_values_adj"],
+        bh_tp["significant_adj"],
+    ):
+        e["p_value_adj"]    = p_adj
+        e["significant_adj"] = sig_adj
+
+    # Accuracy BH correction (only over entries that have an acc p-value)
+    acc_indices = [i for i, e in enumerate(sweep_entries) if e.get("acc_p_value") is not None]
+    if acc_indices:
+        acc_p_vals = [sweep_entries[i]["acc_p_value"] for i in acc_indices]
+        bh_acc     = bh_correction(acc_p_vals)
+        for list_idx, (p_adj, sig_adj) in zip(acc_indices, zip(bh_acc["p_values_adj"], bh_acc["significant_adj"])):
+            sweep_entries[list_idx]["acc_p_value_adj"]    = p_adj
+            sweep_entries[list_idx]["acc_significant_adj"] = sig_adj
+
     # ------------------------------------------------------------------ recommended r
-    # For recommended_r logic we need accuracy_drop_pct; if skipped, default to r=4
     if not args.skip_accuracy:
-        recommended_r = _select_recommended_r(sweep_entries)
+        recommended_r = _select_recommended_r(sweep_entries, use_corrected=True)
     else:
         recommended_r = args.r_values[0]
         print("[skip_accuracy] Cannot compute recommended_r — defaulting to smallest r.")
@@ -418,13 +494,25 @@ def main() -> None:
     print_final_summary(sweep_entries, recommended_r)
 
     # ------------------------------------------------------------------ sweep summary JSON
+    sweep_meta = build_metadata(
+        script_name="run_token_merging.py",
+        args_dict=vars(args),
+        device=args.device,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        n_warmup=n_warmup,
+        n_trials=n_trials,
+    )
+
     summary = {
         "experiment":          "token_merging_sweep",
         "alpha":               0.05,
+        "bh_correction":       "applied to throughput p-values (and accuracy p-values where available)",
         "baseline_throughput": baseline_bench["mean_throughput"],
         "baseline_accuracy":   baseline_acc["top1_accuracy"],
         "results":             sweep_entries,
         "recommended_r":       recommended_r,
+        "metadata":            sweep_meta,
     }
     summary_path = os.path.join(RESULTS_DIR, "tome_sweep_summary.json")
     with open(summary_path, "w") as fh:
@@ -443,6 +531,7 @@ def _print_partial_stats(tp_stats: dict, mem_stats: dict, r: int) -> None:
     print(f"  Throughput  baseline : {tp_stats['mean_a']:.1f} img/sec")
     print(f"  Throughput  tome_r{r} : {tp_stats['mean_b']:.1f}  ({tp_stats['improvement_pct']:+.1f}%)")
     print(f"  Welch t={tp_stats['t_stat']:.3f}  p={tp_stats['p_value']:.4f}  sig: {sig(tp_stats)}")
+    print(f"  Effect size (Hedges' g) = {tp_stats['effect_size']:.3f}  [{tp_stats['practical_interpretation']}]")
     print(f"  Memory      baseline : {mem_stats['mean_a']:.3f} GB")
     print(f"  Memory      tome_r{r} : {mem_stats['mean_b']:.3f}  ({mem_stats['improvement_pct']:+.1f}% reduction)")
     print(f"  Welch t={mem_stats['t_stat']:.3f}  p={mem_stats['p_value']:.4f}  sig: {sig(mem_stats)}")
