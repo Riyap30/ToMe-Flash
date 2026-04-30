@@ -210,27 +210,56 @@ Source files:
 - `final results/tables/project_overview_for_ppt.md`
 - `final results/eval_summary.md`
 
-### 5.2 Statistical highlights
-- **FA-Only vs Baseline (throughput):** +59.1%, p ~ 7.33e-79 (highly significant).
-- **FA-Only vs Baseline (accuracy):** -0.016 pp, p = 0.9478 (not significant).
-- **ToMe r=8 vs Baseline (throughput):** +18.1%, p ~ 8.47e-61 (significant).
-- **Combined vs FA-Only (throughput):** -9.05%, p ~ 1.61e-14 (significant slowdown).
-- **Memory differences:** no significant changes across key comparisons (all p > 0.19 in the main pairwise analyses).
+### 5.2 Pairwise statistical results (alpha = 0.05)
+
+| Comparison | Metric | Effect | 95% CI | p-value | Significant |
+|---|---|---:|---:|---:|---:|
+| FA-Only vs Baseline | Throughput | +59.052% | [+56.209, +61.896]% | 7.33e-79 | Yes |
+| ToMe r=8 vs Baseline | Throughput | +18.080% | N/A (not serialized) | 1.06e-60 | Yes |
+| Combined vs Baseline | Throughput | +44.652% | [+42.137, +47.167]% | 7.87e-74 | Yes |
+| Combined vs FA-Only | Throughput | -9.054% | [-11.202, -6.906]% | 1.61e-14 | Yes |
+| FA-Only vs Baseline | Accuracy | -0.016 pp | [-0.495, +0.463] pp | 0.9478 | No |
+| ToMe r=8 vs Baseline | Accuracy | -0.602 pp | N/A (not serialized) | 0.0179 | Yes |
+| Combined vs Baseline | Accuracy | -1.134 pp | [-1.618, -0.650] pp | 4.49e-06 | Yes |
+| Combined vs FA-Only | Accuracy | -1.118 pp | [-1.603, -0.633] pp | 6.13e-06 | Yes |
+
+### 5.3 Memory and Top-5 summary
+
+| Condition | Mean Peak Memory (GB) | Top-5 Accuracy (%) |
+|---|---:|---:|
+| Baseline | 1.2060 | 95.568 |
+| ToMe r=8 | 1.2158 | 95.160 |
+| FA-Only | 1.1943 | 95.568 |
+| Combined (ToMe+FA) | 1.2029 | 94.972 |
+
+Interpretation:
+- Peak memory differences are small and statistically non-significant in main pairwise tests.
+- Top-5 accuracy remains high (>94.9%) across all conditions, but the combined setup shows the largest drop.
 
 Source files:
 - `final results/phase3_stats.json`
 - `final results/phase4_stats.json`
 - `final results/tables/stats_summary_for_ppt.md`
 
-### 5.3 ToMe sweep behavior (r = 4, 8, 12, 14, 16)
-- Throughput rises with larger `r`, but accuracy drops progressively.
-- `r=8` is selected as the recommended compromise in this project.
-- `r=16` is fastest but produces a substantial accuracy loss.
+### 5.4 ToMe sweep behavior (r = 4, 8, 12, 14, 16)
+
+| r | Final tokens | Token reduction | Throughput (img/s) | Delta throughput vs baseline | Top-1 Accuracy (%) | Delta top-1 vs baseline |
+|---:|---:|---:|---:|---:|---:|---:|
+| 4 | 149 | 24.4% | 2473.1 | -2.84% | 81.588 | -0.162 pp |
+| 8 | 101 | 48.7% | 3005.7 | +18.08% | 81.148 | -0.602 pp |
+| 12 | 53 | 73.1% | 3571.2 | +40.30% | 80.166 | -1.584 pp |
+| 14 | 29 | 85.3% | 3916.9 | +53.88% | 79.294 | -2.456 pp |
+| 16 | 5 | 97.5% | 4197.5 | +64.90% | 77.580 | -4.170 pp |
+
+Interpretation:
+- Throughput improves monotonically as `r` increases.
+- Accuracy degrades progressively with aggressive token merging.
+- `r=8` is chosen as the project-recommended operating point because it delivers a meaningful speedup with moderate accuracy loss.
 
 Source file:
 - `final results/tome_sweep_summary.json`
 
-### 5.4 Figures
+### 5.5 Figures
 
 The following figures are available in `final results/figures/`:
 
@@ -245,12 +274,15 @@ The following figures are available in `final results/figures/`:
 - Memory-specific summary:
   - `final results/figures/memory_nonsig_chart.png`
 
-Quick links:
-- [Pareto curve](final%20results/figures/pareto_curve.png)
-- [Effect sizes](final%20results/figures/effect_sizes.png)
-- [Violin/strip distribution plot](final%20results/figures/violin_strip.png)
+#### Inline charts
 
-### 5.5 Observations
+![Pareto curve](final%20results/figures/pareto_curve.png)
+
+![Effect sizes](final%20results/figures/effect_sizes.png)
+
+![Violin/strip distribution plot](final%20results/figures/violin_strip.png)
+
+### 5.6 Observations
 
 1. **FlashAttention-2 is the strongest single optimization** in this setup, giving the best speedup while preserving accuracy.
 2. **ToMe provides a tunable speed-accuracy trade-off**; moderate merging (`r=8`) is practical, but aggressive merging harms accuracy.
