@@ -1,0 +1,12 @@
+# Statistical Test Summary (PPT-ready)
+
+| Comparison | Metric | Effect | 95% CI | Test statistic | p-value | Significant (alpha=0.05) |
+|---|---|---:|---:|---:|---:|---:|
+| FA-Only vs Baseline | Throughput | +59.052% | [+56.209, +61.896]% | t=41.062 | 7.33e-79 | Yes |
+| ToMe r=8 vs Baseline | Throughput | +18.080% | N/A (not serialized) | t=25.982 | 1.06e-60 | Yes |
+| Combined vs Baseline | Throughput | +44.652% | [+42.137, +47.167]% | t=35.087 | 7.87e-74 | Yes |
+| Combined vs FA-Only | Throughput | -9.054% | [-11.202, -6.906]% | t=-8.314 | 1.61e-14 | Yes |
+| FA-Only vs Baseline | Accuracy | -0.016pp | [-0.495, +0.463]pp | z=-0.065 | 0.9478 | No |
+| ToMe r=8 vs Baseline | Accuracy | -0.602pp | N/A (not serialized) | z=-2.449 | 0.0179 | Yes |
+| Combined vs Baseline | Accuracy | -1.134pp | [-1.618, -0.650]pp | z=-4.587 | 4.49e-06 | Yes |
+| Combined vs FA-Only | Accuracy | -1.118pp | [-1.603, -0.633]pp | z=-4.522 | 6.13e-06 | Yes |

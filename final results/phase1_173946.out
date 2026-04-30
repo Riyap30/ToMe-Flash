@@ -1,0 +1,67 @@
+Job ID      : 173946
+Node        : b-19-1
+GPU         : 0
+Start time  : Sun Apr 26 15:01:44 EDT 2026
+---
+============================================================
+Environment
+============================================================
+  Python      : 3.10.20
+  PyTorch     : 2.5.1+cu121
+  CUDA        : 12.1
+  GPU         : NVIDIA A100-SXM4-40GB
+  VRAM total  : 42.4 GB
+============================================================
+
+Loading baseline model (DeiT-B/16, pretrained)…
+==================================================
+Model: DeiT-B/16 (baseline)
+  Parameters : 86,567,656
+  embed_dim  : 768  ✓
+  num_heads  : 12  ✓
+  head_dim   : 64  ✓  (compatible with FlashAttention-2)
+==================================================
+DataLoader: 196 batches, batch_size=256, num_workers=8
+
+[baseline] Warming up (100 batches)…
+[baseline] Running 100 timed trials…
+
+============================================================
+Benchmark results — baseline
+============================================================
+  Throughput :    2545.4 ± 149.2  images/sec
+  Median tp  :    2606.1  (IQR 4.2)
+  P5 / P95   : 2118.4 / 2609.1
+  Peak VRAM  :     1.206 ± 0.070  GB
+  Batch size : 256
+  Trials     : 100  (18 throughput outliers by IQR rule)
+============================================================
+
+[baseline] Benchmark saved to /scratch/rsp9219/project/results/baseline_benchmark.json
+[baseline] Starting accuracy evaluation over 196 batches…
+  Batch  100/196  top-1: 0.8430  top-5: 0.9671  (21581/25600)
+  Batch  196/196  top-1: 0.8175  top-5: 0.9557  (40875/50000)
+
+=======================================================
+Accuracy results — baseline
+=======================================================
+  Top-1 accuracy : 0.8175  (40875/50000)
+  Top-5 accuracy : 0.9557  (47784/50000)
+=======================================================
+
+[baseline] Accuracy saved to /scratch/rsp9219/project/results/baseline_accuracy.json
+============================================================
+Phase 1 — Final Summary (baseline DeiT-B/16)
+============================================================
+  Throughput : 2545.4 ± 149.2  images/sec
+  Peak VRAM  : 1.206 ± 0.070  GB
+  Top-1 acc  : 0.8175  (40875/50000)
+============================================================
+
+Accuracy check PASSED: 0.8175 is within [0.79, 0.82].
+
+Phase 1 complete.
+Results written to /scratch/rsp9219/project/results/
+---
+End time    : Sun Apr 26 15:05:06 EDT 2026
+Exit status : 0

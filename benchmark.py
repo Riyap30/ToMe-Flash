@@ -63,6 +63,14 @@ def run_benchmark(
     n_trials: int = 30,
     label: str = "baseline",
     metadata: Optional[Dict[str, Any]] = None,
+    profile_dir: Optional[str] = None,
+    profile_wait: int = 1,
+    profile_warmup: int = 1,
+    profile_active: int = 6,
+    profile_repeat: int = 1,
+    profile_record_shapes: bool = True,
+    profile_memory: bool = True,
+    profile_with_stack: bool = False,
 ) -> Dict[str, Any]:
     """Run a timed inference benchmark and return per-trial statistics.
 
@@ -76,6 +84,12 @@ def run_benchmark(
         label:    Identifier used for the output JSON filename and printed table.
         metadata: Optional reproducibility metadata dict (from meta.build_metadata()).
                   Stored under "metadata" key in the output JSON.
+        profile_dir: Optional output directory for PyTorch Profiler traces.
+                     If None, profiling is disabled.
+        profile_wait/profile_warmup/profile_active/profile_repeat:
+                     torch.profiler.schedule(...) controls.
+        profile_record_shapes/profile_memory/profile_with_stack:
+                     Additional profiler detail controls.
 
     Returns:
         dict with keys (existing keys preserved for backward compatibility):
@@ -110,6 +124,41 @@ def run_benchmark(
     throughputs:   List[float] = []
     peak_memories: List[float] = []
     elapsed_ms:    List[float] = []
+    traces_written = False
+
+    prof = None
+    if profile_dir:
+        os.makedirs(profile_dir, exist_ok=True)
+        activities = [torch.profiler.ProfilerActivity.CPU]
+        if device.startswith("cuda"):
+            activities.append(torch.profiler.ProfilerActivity.CUDA)
+
+        total_profile_steps = profile_repeat * (profile_wait + profile_warmup + profile_active)
+        if n_trials < total_profile_steps:
+            print(
+                f"[{label}] WARNING: n_trials={n_trials} is smaller than profiler schedule "
+                f"steps={total_profile_steps}. Increase n_trials or reduce schedule to ensure "
+                "an active trace window is captured."
+            )
+
+        print(
+            f"[{label}] Profiling enabled. Writing traces to: {profile_dir} "
+            f"(wait={profile_wait}, warmup={profile_warmup}, active={profile_active}, repeat={profile_repeat})"
+        )
+        prof = torch.profiler.profile(
+            activities=activities,
+            schedule=torch.profiler.schedule(
+                wait=profile_wait,
+                warmup=profile_warmup,
+                active=profile_active,
+                repeat=profile_repeat,
+            ),
+            on_trace_ready=torch.profiler.tensorboard_trace_handler(profile_dir, worker_name=label),
+            record_shapes=profile_record_shapes,
+            profile_memory=profile_memory,
+            with_stack=profile_with_stack,
+        )
+        prof.start()
 
     print(f"[{label}] Running {n_trials} timed trials…")
     with torch.no_grad():
@@ -135,12 +184,23 @@ def run_benchmark(
             torch.cuda.synchronize(device)
             elapsed = time.perf_counter() - t0
 
+            if prof is not None:
+                prof.step()
+                traces_written = True
+
             peak_mem_gb: float = torch.cuda.max_memory_allocated(device) / 1e9
             throughput:  float = actual_batch / elapsed
 
             throughputs.append(throughput)
             peak_memories.append(peak_mem_gb)
             elapsed_ms.append(elapsed * 1000.0)
+
+    if prof is not None:
+        prof.stop()
+        if traces_written:
+            print(f"[{label}] Profiler trace export complete: {profile_dir}")
+        else:
+            print(f"[{label}] Profiler ran but no trace steps were recorded.")
 
     # ------------------------------------------------------------------ statistics
     mean_tp  = statistics.mean(throughputs)

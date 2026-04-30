@@ -1,0 +1,184 @@
+Job ID      : 174223
+Node        : b-19-20
+GPU         : 0
+Start time  : Sun Apr 26 20:15:16 EDT 2026
+---
+============================================================
+Environment
+============================================================
+  Python      : 3.10.20
+  PyTorch     : 2.5.1+cu121
+  CUDA        : 12.1
+  GPU         : NVIDIA A100-SXM4-40GB
+  VRAM total  : 42.4 GB
+============================================================
+
+Loading combined model (DeiT-B/16 + ToMe r=8 + FlashAttention-2)...
+CombinedAttentionBlock patched into all 12 transformer blocks (r=8, final tokens per image: 101).
+Note: size-weighted attention bias is not applied (flash_attn_func does not support per-token logit biases); size tensor used for weighted-mean merging only.
+Sanity check PASSED: output shape (1, 1000) confirmed.
+
+DataLoader: 196 batches, batch_size=256, num_workers=8
+
+[combined] Warming up (100 batches)…
+[combined] Running 100 timed trials…
+
+============================================================
+Benchmark results — combined
+============================================================
+  Throughput :    3682.0 ± 287.5  images/sec
+  Median tp  :    3875.5  (IQR 440.3)
+  P5 / P95   : 3192.4 / 3885.8
+  Peak VRAM  :     1.203 ± 0.070  GB
+  Batch size : 256
+  Trials     : 100  (0 throughput outliers by IQR rule)
+============================================================
+
+[combined] Benchmark saved to /scratch/rsp9219/project/results/combined_benchmark.json
+[combined] Starting accuracy evaluation over 196 batches…
+  Batch  100/196  top-1: 0.8341  top-5: 0.9622  (21353/25600)
+  Batch  196/196  top-1: 0.8062  top-5: 0.9497  (40308/50000)
+
+=======================================================
+Accuracy results — combined
+=======================================================
+  Top-1 accuracy : 0.8062  (40308/50000)
+  Top-5 accuracy : 0.9497  (47486/50000)
+=======================================================
+
+[combined] Accuracy saved to /scratch/rsp9219/project/results/combined_accuracy.json
+Loaded ToMe-only results from: tome_r8_*.json
+Loaded prior-phase results:
+  Baseline  : 2545.4 ± 149.2 img/s  | mem 1.206 GB  | top-1 0.8175
+  ToMe r=8  : 3005.7 ± 95.4 img/s  | mem 1.216 GB  | top-1 0.8115
+  FA-only   : 4048.6 ± 334.3 img/s  | mem 1.194 GB  | top-1 0.8173
+
+======================================================================
+Statistical comparison: baseline  vs  combined
+======================================================================
+
+Throughput (images/sec)
+  Baseline : 2545.4
+  combined    : 3682.0  (+44.7%)
+  95% CI on diff : [1072.6, 1200.6]
+  Welch t=35.087  p=0.0000  significant: YES *
+  Effect size (Hedges' g) = 4.943  [large]
+
+Peak GPU memory (GB)
+  Baseline : 1.206
+  combined    : 1.203  (+0.3% reduction)
+  95% CI on diff : [-0.023, 0.016]
+  Welch t=-0.313  p=0.7546  significant: no
+  Effect size (Hedges' g) = -0.044  [negligible]
+
+Top-1 accuracy
+  Baseline : 0.8175
+  combined    : 0.8062  (-1.13 pp absolute difference)
+  95% CI on diff : [-1.6184, -0.6496]
+  z=-4.587  p=0.0000  significant: YES *
+
+======================================================================
+Note: α = 0.05 (pre-registered). Throughput/memory: Welch's t-test.
+Accuracy: two-proportion z-test. Effect size: Hedges' g.
+======================================================================
+
+======================================================================
+Statistical comparison: baseline  vs  combined vs tome_r8
+======================================================================
+
+Throughput (images/sec)
+  Baseline : 3005.7
+  combined vs tome_r8: 3682.0  (+22.5%)
+  95% CI on diff : [616.4, 736.3]
+  Welch t=22.327  p=0.0000  significant: YES *
+  Effect size (Hedges' g) = 3.146  [large]
+
+Peak GPU memory (GB)
+  Baseline : 1.216
+  combined vs tome_r8: 1.203  (+1.1% reduction)
+  95% CI on diff : [-0.032, 0.007]
+  Welch t=-1.299  p=0.1956  significant: no
+  Effect size (Hedges' g) = -0.183  [negligible]
+
+Top-1 accuracy
+  Baseline : 0.8115
+  combined vs tome_r8: 0.8062  (-0.53 pp absolute difference)
+  95% CI on diff : [-1.0194, -0.0446]
+  z=-2.139  p=0.0324  significant: YES *
+
+======================================================================
+Note: α = 0.05 (pre-registered). Throughput/memory: Welch's t-test.
+Accuracy: two-proportion z-test. Effect size: Hedges' g.
+======================================================================
+
+======================================================================
+Statistical comparison: baseline  vs  combined vs flash_only
+======================================================================
+
+Throughput (images/sec)
+  Baseline : 4048.6
+  combined vs flash_only: 3682.0  (-9.1%)
+  95% CI on diff : [-453.5, -279.6]
+  Welch t=-8.314  p=0.0000  significant: YES *
+  Effect size (Hedges' g) = -1.171  [large]
+
+Peak GPU memory (GB)
+  Baseline : 1.194
+  combined vs flash_only: 1.203  (-0.7% reduction)
+  95% CI on diff : [-0.011, 0.028]
+  Welch t=0.879  p=0.3805  significant: no
+  Effect size (Hedges' g) = 0.124  [negligible]
+
+Top-1 accuracy
+  Baseline : 0.8173
+  combined vs flash_only: 0.8062  (-1.12 pp absolute difference)
+  95% CI on diff : [-1.6025, -0.6335]
+  z=-4.522  p=0.0000  significant: YES *
+
+======================================================================
+Note: α = 0.05 (pre-registered). Throughput/memory: Welch's t-test.
+Accuracy: two-proportion z-test. Effect size: Hedges' g.
+======================================================================
+
+Phase 4 stats saved to /scratch/rsp9219/project/results/phase4_stats.json
+
+====================================================================================================
+Phase 4 — Consolidated Results: Baseline | ToMe r=8 | FA-only | Combined
+====================================================================================================
+  Condition         Throughput (img/s)    Peak VRAM (GB)   Top-1 Acc   vs Baseline
+----------------------------------------------------------------------------------------------------
+  Baseline              2545.4 ± 149.2     1.206 ± 0.070      0.8175             —
+  ToMe r=8               3005.7 ± 95.4     1.216 ± 0.071      0.8115       +18.1%*
+  FA-only               4048.6 ± 334.3     1.194 ± 0.069      0.8173       +59.1%*
+  Combined              3682.0 ± 287.5     1.203 ± 0.070      0.8062       +44.7%*
+----------------------------------------------------------------------------------------------------
+  * = throughput improvement vs baseline is statistically significant (p < 0.05, Welch t-test)
+====================================================================================================
+
+Pairwise significance (α = 0.05):
+  Combined vs Baseline          tp: p=0.0000*  g=4.94     mem: p=0.7546      acc: p=0.0000*
+  Combined vs ToMe r=8          tp: p=0.0000*  g=3.15     mem: p=0.1956      acc: p=0.0324*
+  Combined vs FA-only           tp: p=0.0000*  g=-1.17    mem: p=0.3805      acc: p=0.0000*
+
+============================================================
+Phase 4 — Combined ToMe r=8 + FlashAttention-2 (DeiT-B/16)
+============================================================
+  Throughput : 3682.0 ± 287.5  images/sec  (+44.7% vs baseline)
+  Peak VRAM  : 1.203 ± 0.070  GB  (+0.3% reduction)
+  Top-1 acc  : 0.8062  (40308/50000)  (-1.13 pp vs baseline)
+  Top-5 acc  : 0.9497
+
+Statistical significance (α = 0.05, vs baseline):
+  Throughput : YES (p=0.0000)  g=4.943 [large]
+  Memory     : no  (p=0.7546)  g=-0.044 [negligible]
+  Accuracy   : YES (p=0.0000)
+
+Additive gains (combined vs each single technique):
+  vs ToMe r=8  — throughput: +22.5%  YES (p=0.0000)  g=3.146
+  vs FA-only   — throughput: -9.1%  YES (p=0.0000)  g=-1.171
+============================================================
+
+Phase 4 complete. Results written to /scratch/rsp9219/project/results/
+---
+End time    : Sun Apr 26 20:18:45 EDT 2026
+Exit status : 0

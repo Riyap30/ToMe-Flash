@@ -1,0 +1,32 @@
+{
+  "label": "combined",
+  "correct": 40308,
+  "total": 50000,
+  "top1_accuracy": 0.80616,
+  "top1_proportion": 0.80616,
+  "correct_top5": 47486,
+  "top5_accuracy": 0.94972,
+  "top5_proportion": 0.94972,
+  "metadata": {
+    "timestamp_utc": "2026-04-27T00:15:55.554982Z",
+    "git_commit": "unknown",
+    "python_version": "3.10.20",
+    "pytorch_version": "2.5.1+cu121",
+    "cuda_version": "12.1",
+    "device_name": "NVIDIA A100-SXM4-40GB",
+    "script_name": "run_combined.py",
+    "batch_size": 256,
+    "num_workers": 8,
+    "n_warmup": 100,
+    "n_trials": 100,
+    "args": {
+      "batch_size": 256,
+      "num_workers": 8,
+      "fast": false,
+      "device": "cuda",
+      "r": 8,
+      "n_warmup": 100,
+      "n_trials": 100
+    }
+  }
+}

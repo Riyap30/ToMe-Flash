@@ -1,0 +1,439 @@
+Job ID      : 173954
+Node        : b-19-21
+GPU         : 0
+Start time  : Sun Apr 26 15:07:42 EDT 2026
+---
+[slurm] Python: /ext3/env/bin/python
+[slurm] tome check: /ext3/env/lib/python3.10/site-packages/tome/__init__.py
+============================================================
+Environment
+============================================================
+  Python  : 3.10.20
+  PyTorch : 2.5.1+cu121
+  CUDA    : 12.1
+  GPU     : NVIDIA A100-SXM4-40GB
+  VRAM    : 42.4 GB
+============================================================
+
+Loaded baseline results:
+  Throughput : 2545.433 ± 149.235 img/sec
+  Memory     : 1.2060 ± 0.0702 GB
+  Top-1 acc  : 0.81750 (40875/50000)
+
+
+============================================================
+r=0 Sanity Check  (ToMe patch must not alter outputs at r=0)
+============================================================
+ToMe applied with r=0. Tokens per image at final layer: 197
+  [PASS] Logit check        : max |diff| = 0.00e+00  (tol 1e-2)
+[sanity_r0_bench] Warming up (5 batches)…
+[sanity_r0_bench] Running 10 timed trials…
+
+============================================================
+Benchmark results — sanity_r0_bench
+============================================================
+  Throughput :    2536.6 ± 156.2  images/sec
+  Median tp  :    2585.8  (IQR 3.4)
+  P5 / P95   : 2312.5 / 2588.3
+  Peak VRAM  :     1.548 ± 0.000  GB
+  Batch size : 256
+  Trials     : 10  (1 throughput outliers by IQR rule)
+============================================================
+
+[sanity_r0_bench] Benchmark saved to /scratch/rsp9219/project/results/sanity_r0_bench_benchmark.json
+  [PASS] Throughput check   : r=0 = 2536.6  baseline = 2545.4  deviation = 0.3%  (tol 5%)
+[sanity_base_acc] Starting accuracy evaluation over 20 batches…
+  Batch   20/20  top-1: 0.8617  top-5: 0.9742  (4412/5120)
+
+=======================================================
+Accuracy results — sanity_base_acc
+=======================================================
+  Top-1 accuracy : 0.8617  (4412/5120)
+  Top-5 accuracy : 0.9742  (4988/5120)
+=======================================================
+
+[sanity_base_acc] Accuracy saved to /scratch/rsp9219/project/results/sanity_base_acc_accuracy.json
+[sanity_r0_acc] Starting accuracy evaluation over 20 batches…
+  Batch   20/20  top-1: 0.8617  top-5: 0.9742  (4412/5120)
+
+=======================================================
+Accuracy results — sanity_r0_acc
+=======================================================
+  Top-1 accuracy : 0.8617  (4412/5120)
+  Top-5 accuracy : 0.9742  (4988/5120)
+=======================================================
+
+[sanity_r0_acc] Accuracy saved to /scratch/rsp9219/project/results/sanity_r0_acc_accuracy.json
+  [PASS] Accuracy check     : r=0 = 0.8617  baseline = 0.8617  |diff| = 0.0000  (tol 0.001)
+
+r=0 sanity check PASSED — ToMe patch is transparent at r=0.
+============================================================
+
+Benchmark config: 100 warmup + 100 timed trials per condition.
+
+************************************************************
+  Token Merging  r = 4
+************************************************************
+ToMe applied with r=4. Tokens per image at final layer: 149
+==================================================
+ToMe configuration  (r=4)
+==================================================
+  Initial tokens : 197  (196 patch + 1 CLS)
+  Merged per layer: 4  ×  12 layers  =  48 total
+  Final tokens   : 149
+  Token reduction: 24.4%
+==================================================
+[tome_r4] Warming up (100 batches)…
+[tome_r4] Running 100 timed trials…
+
+============================================================
+Benchmark results — tome_r4
+============================================================
+  Throughput :    2473.1 ± 168.7  images/sec
+  Median tp  :    2556.6  (IQR 4.2)
+  P5 / P95   : 2082.8 / 2559.5
+  Peak VRAM  :     1.252 ± 0.073  GB
+  Batch size : 256
+  Trials     : 100  (23 throughput outliers by IQR rule)
+============================================================
+
+[tome_r4] Benchmark saved to /scratch/rsp9219/project/results/tome_r4_benchmark.json
+[tome_r4] Starting accuracy evaluation over 196 batches…
+  Batch  100/196  top-1: 0.8419  top-5: 0.9659  (21552/25600)
+  Batch  196/196  top-1: 0.8159  top-5: 0.9544  (40794/50000)
+
+=======================================================
+Accuracy results — tome_r4
+=======================================================
+  Top-1 accuracy : 0.8159  (40794/50000)
+  Top-5 accuracy : 0.9544  (47718/50000)
+=======================================================
+
+[tome_r4] Accuracy saved to /scratch/rsp9219/project/results/tome_r4_accuracy.json
+======================================================================
+Statistical comparison: baseline  vs  tome_r4
+======================================================================
+
+Throughput (images/sec)
+  Baseline : 2545.4
+  tome_r4     : 2473.1  (-2.8%)
+  95% CI on diff : [-116.8, -27.9]
+  Welch t=-3.212  p=0.0015  significant: YES *
+  Effect size (Hedges' g) = -0.453  [small]
+
+Peak GPU memory (GB)
+  Baseline : 1.206
+  tome_r4     : 1.252  (-3.9% reduction)
+  95% CI on diff : [0.026, 0.066]
+  Welch t=4.588  p=0.0000  significant: YES *
+  Effect size (Hedges' g) = 0.646  [medium]
+
+Top-1 accuracy
+  Baseline : 0.8175
+  tome_r4     : 0.8159  (-0.16 pp absolute difference)
+  95% CI on diff : [-0.6416, 0.3176]
+  z=-0.662  p=0.5080  significant: no
+
+======================================================================
+Note: α = 0.05 (pre-registered). Throughput/memory: Welch's t-test.
+Accuracy: two-proportion z-test. Effect size: Hedges' g.
+======================================================================
+
+  [NOTE] Throughput gain for r=4 is statistically significant (p=0.0015) but modest (-2.8%). Consider practical significance alongside the p-value.
+
+************************************************************
+  Token Merging  r = 8
+************************************************************
+ToMe applied with r=8. Tokens per image at final layer: 101
+==================================================
+ToMe configuration  (r=8)
+==================================================
+  Initial tokens : 197  (196 patch + 1 CLS)
+  Merged per layer: 8  ×  12 layers  =  96 total
+  Final tokens   : 101
+  Token reduction: 48.7%
+==================================================
+[tome_r8] Warming up (100 batches)…
+[tome_r8] Running 100 timed trials…
+
+============================================================
+Benchmark results — tome_r8
+============================================================
+  Throughput :    3005.7 ± 95.4  images/sec
+  Median tp  :    3025.1  (IQR 2.5)
+  P5 / P95   : 3011.0 / 3028.5
+  Peak VRAM  :     1.216 ± 0.071  GB
+  Batch size : 256
+  Trials     : 100  (14 throughput outliers by IQR rule)
+============================================================
+
+[tome_r8] Benchmark saved to /scratch/rsp9219/project/results/tome_r8_benchmark.json
+[tome_r8] Starting accuracy evaluation over 196 batches…
+  Batch  100/196  top-1: 0.8383  top-5: 0.9632  (21461/25600)
+  Batch  196/196  top-1: 0.8115  top-5: 0.9516  (40574/50000)
+
+=======================================================
+Accuracy results — tome_r8
+=======================================================
+  Top-1 accuracy : 0.8115  (40574/50000)
+  Top-5 accuracy : 0.9516  (47580/50000)
+=======================================================
+
+[tome_r8] Accuracy saved to /scratch/rsp9219/project/results/tome_r8_accuracy.json
+======================================================================
+Statistical comparison: baseline  vs  tome_r8
+======================================================================
+
+Throughput (images/sec)
+  Baseline : 2545.4
+  tome_r8     : 3005.7  (+18.1%)
+  95% CI on diff : [425.3, 495.2]
+  Welch t=25.982  p=0.0000  significant: YES *
+  Effect size (Hedges' g) = 3.660  [large]
+
+Peak GPU memory (GB)
+  Baseline : 1.206
+  tome_r8     : 1.216  (-0.8% reduction)
+  95% CI on diff : [-0.010, 0.029]
+  Welch t=0.983  p=0.3268  significant: no
+  Effect size (Hedges' g) = 0.138  [negligible]
+
+Top-1 accuracy
+  Baseline : 0.8175
+  tome_r8     : 0.8115  (-0.60 pp absolute difference)
+  95% CI on diff : [-1.0838, -0.1202]
+  z=-2.449  p=0.0143  significant: YES *
+
+======================================================================
+Note: α = 0.05 (pre-registered). Throughput/memory: Welch's t-test.
+Accuracy: two-proportion z-test. Effect size: Hedges' g.
+======================================================================
+
+
+************************************************************
+  Token Merging  r = 12
+************************************************************
+ToMe applied with r=12. Tokens per image at final layer: 53
+==================================================
+ToMe configuration  (r=12)
+==================================================
+  Initial tokens : 197  (196 patch + 1 CLS)
+  Merged per layer: 12  ×  12 layers  =  144 total
+  Final tokens   : 53
+  Token reduction: 73.1%
+==================================================
+[tome_r12] Warming up (100 batches)…
+[tome_r12] Running 100 timed trials…
+
+============================================================
+Benchmark results — tome_r12
+============================================================
+  Throughput :    3571.2 ± 85.3  images/sec
+  Median tp  :    3590.7  (IQR 3.4)
+  P5 / P95   : 3441.6 / 3595.9
+  Peak VRAM  :     1.181 ± 0.068  GB
+  Batch size : 256
+  Trials     : 100  (19 throughput outliers by IQR rule)
+============================================================
+
+[tome_r12] Benchmark saved to /scratch/rsp9219/project/results/tome_r12_benchmark.json
+[tome_r12] Starting accuracy evaluation over 196 batches…
+  Batch  100/196  top-1: 0.8283  top-5: 0.9589  (21205/25600)
+  Batch  196/196  top-1: 0.8017  top-5: 0.9460  (40083/50000)
+
+=======================================================
+Accuracy results — tome_r12
+=======================================================
+  Top-1 accuracy : 0.8017  (40083/50000)
+  Top-5 accuracy : 0.9460  (47302/50000)
+=======================================================
+
+[tome_r12] Accuracy saved to /scratch/rsp9219/project/results/tome_r12_accuracy.json
+======================================================================
+Statistical comparison: baseline  vs  tome_r12
+======================================================================
+
+Throughput (images/sec)
+  Baseline : 2545.4
+  tome_r12    : 3571.2  (+40.3%)
+  95% CI on diff : [991.8, 1059.7]
+  Welch t=59.681  p=0.0000  significant: YES *
+  Effect size (Hedges' g) = 8.408  [large]
+
+Peak GPU memory (GB)
+  Baseline : 1.206
+  tome_r12    : 1.181  (+2.1% reduction)
+  95% CI on diff : [-0.045, -0.006]
+  Welch t=-2.577  p=0.0107  significant: YES *
+  Effect size (Hedges' g) = -0.363  [small]
+
+Top-1 accuracy
+  Baseline : 0.8175
+  tome_r12    : 0.8017  (-1.58 pp absolute difference)
+  95% CI on diff : [-2.0706, -1.0974]
+  z=-6.379  p=0.0000  significant: YES *
+
+======================================================================
+Note: α = 0.05 (pre-registered). Throughput/memory: Welch's t-test.
+Accuracy: two-proportion z-test. Effect size: Hedges' g.
+======================================================================
+
+
+************************************************************
+  Token Merging  r = 14
+************************************************************
+ToMe applied with r=14. Tokens per image at final layer: 29
+==================================================
+ToMe configuration  (r=14)
+==================================================
+  Initial tokens : 197  (196 patch + 1 CLS)
+  Merged per layer: 14  ×  12 layers  =  168 total
+  Final tokens   : 29
+  Token reduction: 85.3%
+==================================================
+[tome_r14] Warming up (100 batches)…
+[tome_r14] Running 100 timed trials…
+
+============================================================
+Benchmark results — tome_r14
+============================================================
+  Throughput :    3916.9 ± 96.7  images/sec
+  Median tp  :    3935.2  (IQR 3.2)
+  P5 / P95   : 3912.1 / 3942.2
+  Peak VRAM  :     1.164 ± 0.067  GB
+  Batch size : 256
+  Trials     : 100  (17 throughput outliers by IQR rule)
+============================================================
+
+[tome_r14] Benchmark saved to /scratch/rsp9219/project/results/tome_r14_benchmark.json
+[tome_r14] Starting accuracy evaluation over 196 batches…
+  Batch  100/196  top-1: 0.8193  top-5: 0.9548  (20975/25600)
+  Batch  196/196  top-1: 0.7929  top-5: 0.9405  (39647/50000)
+
+=======================================================
+Accuracy results — tome_r14
+=======================================================
+  Top-1 accuracy : 0.7929  (39647/50000)
+  Top-5 accuracy : 0.9405  (47024/50000)
+=======================================================
+
+[tome_r14] Accuracy saved to /scratch/rsp9219/project/results/tome_r14_accuracy.json
+======================================================================
+Statistical comparison: baseline  vs  tome_r14
+======================================================================
+
+Throughput (images/sec)
+  Baseline : 2545.4
+  tome_r14    : 3916.9  (+53.9%)
+  95% CI on diff : [1336.4, 1406.6]
+  Welch t=77.124  p=0.0000  significant: YES *
+  Effect size (Hedges' g) = 10.866  [large]
+
+Peak GPU memory (GB)
+  Baseline : 1.206
+  tome_r14    : 1.164  (+3.5% reduction)
+  95% CI on diff : [-0.062, -0.023]
+  Welch t=-4.384  p=0.0000  significant: YES *
+  Effect size (Hedges' g) = -0.618  [medium]
+
+Top-1 accuracy
+  Baseline : 0.8175
+  tome_r14    : 0.7929  (-2.46 pp absolute difference)
+  95% CI on diff : [-2.9467, -1.9653]
+  z=-9.805  p=0.0000  significant: YES *
+
+======================================================================
+Note: α = 0.05 (pre-registered). Throughput/memory: Welch's t-test.
+Accuracy: two-proportion z-test. Effect size: Hedges' g.
+======================================================================
+
+
+************************************************************
+  Token Merging  r = 16
+************************************************************
+ToMe applied with r=16. Tokens per image at final layer: 5
+==================================================
+ToMe configuration  (r=16)
+==================================================
+  Initial tokens : 197  (196 patch + 1 CLS)
+  Merged per layer: 16  ×  12 layers  =  192 total
+  Final tokens   : 5
+  Token reduction: 97.5%
+==================================================
+[tome_r16] Warming up (100 batches)…
+[tome_r16] Running 100 timed trials…
+
+============================================================
+Benchmark results — tome_r16
+============================================================
+  Throughput :    4197.5 ± 228.9  images/sec
+  Median tp  :    4287.8  (IQR 4.3)
+  P5 / P95   : 3491.8 / 4295.8
+  Peak VRAM  :     1.147 ± 0.066  GB
+  Batch size : 256
+  Trials     : 100  (24 throughput outliers by IQR rule)
+============================================================
+
+[tome_r16] Benchmark saved to /scratch/rsp9219/project/results/tome_r16_benchmark.json
+[tome_r16] Starting accuracy evaluation over 196 batches…
+  Batch  100/196  top-1: 0.8032  top-5: 0.9452  (20562/25600)
+  Batch  196/196  top-1: 0.7758  top-5: 0.9301  (38790/50000)
+
+=======================================================
+Accuracy results — tome_r16
+=======================================================
+  Top-1 accuracy : 0.7758  (38790/50000)
+  Top-5 accuracy : 0.9301  (46504/50000)
+=======================================================
+
+[tome_r16] Accuracy saved to /scratch/rsp9219/project/results/tome_r16_accuracy.json
+======================================================================
+Statistical comparison: baseline  vs  tome_r16
+======================================================================
+
+Throughput (images/sec)
+  Baseline : 2545.4
+  tome_r16    : 4197.5  (+64.9%)
+  95% CI on diff : [1598.1, 1706.0]
+  Welch t=60.469  p=0.0000  significant: YES *
+  Effect size (Hedges' g) = 8.519  [large]
+
+Peak GPU memory (GB)
+  Baseline : 1.206
+  tome_r16    : 1.147  (+4.9% reduction)
+  95% CI on diff : [-0.078, -0.040]
+  Welch t=-6.106  p=0.0000  significant: YES *
+  Effect size (Hedges' g) = -0.860  [large]
+
+Top-1 accuracy
+  Baseline : 0.8175
+  tome_r16    : 0.7758  (-4.17 pp absolute difference)
+  95% CI on diff : [-4.6683, -3.6717]
+  z=-16.381  p=0.0000  significant: YES *
+
+======================================================================
+Note: α = 0.05 (pre-registered). Throughput/memory: Welch's t-test.
+Accuracy: two-proportion z-test. Effect size: Hedges' g.
+======================================================================
+
+
+=====================================================================================
+ToMe Sweep — Final Summary
+=====================================================================================
+     r  tokens     thrpt       ±   vs base    p-val    p-adj  sig*   top-1   acc drop
+-------------------------------------------------------------------------------------
+     4     149    2473.1  168.707     -2.8%   0.0015   0.0015   */*  0.8159  +0.16%
+→   8     101    3005.7  95.417    +18.1%   0.0000   0.0000   */*  0.8115  +0.60%
+    12      53    3571.2  85.272    +40.3%   0.0000   0.0000   */*  0.8017  +1.58%
+    14      29    3916.9  96.707    +53.9%   0.0000   0.0000   */*  0.7929  +2.46%
+    16       5    4197.5  228.854    +64.9%   0.0000   0.0000   */*  0.7758  +4.17%
+-------------------------------------------------------------------------------------
+→ = recommended r  |  sig* = raw/BH-corrected  |  α = 0.05 (pre-registered)
+Recommended r: 8
+=====================================================================================
+
+Sweep summary saved to /scratch/rsp9219/project/results/tome_sweep_summary.json
+Recommended r = 8  (used for combined ToMe+FlashAttn condition)
+---
+End time    : Sun Apr 26 15:19:27 EDT 2026
+Exit status : 0

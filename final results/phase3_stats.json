@@ -1,0 +1,71 @@
+{
+  "experiment": "flash_only_vs_baseline",
+  "label": "flash_only",
+  "alpha": 0.05,
+  "throughput": {
+    "t_stat": 41.06183042984896,
+    "p_value": 7.330589888572334e-79,
+    "significant": true,
+    "ci_low": 1430.7521948052179,
+    "ci_high": 1575.5272099708657,
+    "mean_a": 2545.4327661389257,
+    "mean_b": 4048.5724685269674,
+    "improvement_pct": 59.05242214148518,
+    "effect_size": 5.784995653846807,
+    "practical_interpretation": "large",
+    "baseline_mean": 2545.432766138925,
+    "baseline_std": 149.2348189898041,
+    "flash_mean": 4048.572468526968,
+    "flash_std": 334.26681194949117
+  },
+  "memory": {
+    "t_stat": -1.1893077582221019,
+    "p_value": 0.2357430430599957,
+    "significant": false,
+    "ci_low": -0.031202766186943946,
+    "ci_high": 0.007725477226943826,
+    "mean_a": 1.2060433408000002,
+    "mean_b": 1.1943046963200001,
+    "improvement_pct": 0.9733186265274273,
+    "effect_size": -0.16755561406731123,
+    "practical_interpretation": "negligible",
+    "baseline_mean": 1.2060433408,
+    "baseline_std": 0.070193152,
+    "flash_mean": 1.19430469632,
+    "flash_std": 0.0693895168
+  },
+  "accuracy": {
+    "z_stat": -0.06548483775991124,
+    "p_value": 0.9477879781374887,
+    "significant": false,
+    "ci_low": -0.49488067151112464,
+    "ci_high": 0.46288067151111484,
+    "prop_a": 0.8175,
+    "prop_b": 0.81734,
+    "diff_pct": -0.0160000000000049,
+    "baseline_top1": 0.8175,
+    "flash_top1": 0.81734,
+    "flash_top5": 0.95568
+  },
+  "metadata": {
+    "timestamp_utc": "2026-04-26T20:46:45.704020Z",
+    "git_commit": "unknown",
+    "python_version": "3.10.20",
+    "pytorch_version": "2.5.1+cu121",
+    "cuda_version": "12.1",
+    "device_name": "NVIDIA A100-SXM4-40GB",
+    "script_name": "run_flash_attention.py",
+    "batch_size": 256,
+    "num_workers": 8,
+    "n_warmup": 100,
+    "n_trials": 100,
+    "args": {
+      "batch_size": 256,
+      "num_workers": 8,
+      "fast": false,
+      "device": "cuda",
+      "n_warmup": 100,
+      "n_trials": 100
+    }
+  }
+}

@@ -1,0 +1,102 @@
+Job ID      : 174089
+Node        : b-19-24
+GPU         : 0
+Start time  : Sun Apr 26 16:46:13 EDT 2026
+---
+============================================================
+Environment
+============================================================
+  Python      : 3.10.20
+  PyTorch     : 2.5.1+cu121
+  CUDA        : 12.1
+  GPU         : NVIDIA A100-SXM4-40GB
+  VRAM total  : 42.4 GB
+============================================================
+
+Loading FA-only model (DeiT-B/16 + FlashAttention-2)…
+FlashAttentionBlock patched into all 12 transformer blocks.
+Sanity check PASSED: output shape (1, 1000) confirmed.
+
+DataLoader: 196 batches, batch_size=256, num_workers=8
+
+[flash_only] Warming up (100 batches)…
+[flash_only] Running 100 timed trials…
+
+============================================================
+Benchmark results — flash_only
+============================================================
+  Throughput :    4048.6 ± 334.3  images/sec
+  Median tp  :    4295.5  (IQR 581.8)
+  P5 / P95   : 3519.0 / 4347.8
+  Peak VRAM  :     1.194 ± 0.069  GB
+  Batch size : 256
+  Trials     : 100  (0 throughput outliers by IQR rule)
+============================================================
+
+[flash_only] Benchmark saved to /scratch/rsp9219/project/results/flash_only_benchmark.json
+[flash_only] Starting accuracy evaluation over 196 batches…
+  Batch  100/196  top-1: 0.8427  top-5: 0.9672  (21574/25600)
+  Batch  196/196  top-1: 0.8173  top-5: 0.9557  (40867/50000)
+
+=======================================================
+Accuracy results — flash_only
+=======================================================
+  Top-1 accuracy : 0.8173  (40867/50000)
+  Top-5 accuracy : 0.9557  (47784/50000)
+=======================================================
+
+[flash_only] Accuracy saved to /scratch/rsp9219/project/results/flash_only_accuracy.json
+Loaded Phase 1 baseline results:
+  Throughput : 2545.4 ± 149.2 img/sec
+  Memory     : 1.206 ± 0.070 GB
+  Top-1 acc  : 0.8175 (40875/50000)
+
+======================================================================
+Statistical comparison: baseline  vs  flash_only
+======================================================================
+
+Throughput (images/sec)
+  Baseline : 2545.4
+  flash_only  : 4048.6  (+59.1%)
+  95% CI on diff : [1430.8, 1575.5]
+  Welch t=41.062  p=0.0000  significant: YES *
+  Effect size (Hedges' g) = 5.785  [large]
+
+Peak GPU memory (GB)
+  Baseline : 1.206
+  flash_only  : 1.194  (+1.0% reduction)
+  95% CI on diff : [-0.031, 0.008]
+  Welch t=-1.189  p=0.2357  significant: no
+  Effect size (Hedges' g) = -0.168  [negligible]
+
+Top-1 accuracy
+  Baseline : 0.8175
+  flash_only  : 0.8173  (-0.02 pp absolute difference)
+  95% CI on diff : [-0.4949, 0.4629]
+  z=-0.065  p=0.9478  significant: no
+
+======================================================================
+Note: α = 0.05 (pre-registered). Throughput/memory: Welch's t-test.
+Accuracy: two-proportion z-test. Effect size: Hedges' g.
+======================================================================
+
+============================================================
+FlashAttention — Final Summary (FA-only DeiT-B/16)
+============================================================
+  Throughput : 4048.6 ± 334.3  images/sec  (+59.1% vs baseline)  [effect: large]
+  Peak VRAM  : 1.194 ± 0.069  GB  (+1.0% reduction)
+  Top-1 acc  : 0.8173  (40867/50000)  (-0.02 pp vs baseline)
+  Top-5 acc  : 0.9557
+
+Statistical significance (α = 0.05):
+  Throughput : YES (p=0.0000)  g=5.785 [large]
+  Memory     : no  (p=0.2357)  g=-0.168 [negligible]
+  Accuracy   : no  (p=0.9478)
+============================================================
+
+FlashAttention stats saved to /scratch/rsp9219/project/results/phase3_stats.json
+
+FlashAttention benchmark complete. Results written to /scratch/rsp9219/project/results/
+---
+End time    : Sun Apr 26 16:49:27 EDT 2026
+Exit status : 0

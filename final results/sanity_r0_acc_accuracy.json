@@ -1,0 +1,10 @@
+{
+  "label": "sanity_r0_acc",
+  "correct": 4412,
+  "total": 5120,
+  "top1_accuracy": 0.86171875,
+  "top1_proportion": 0.86171875,
+  "correct_top5": 4988,
+  "top5_accuracy": 0.97421875,
+  "top5_proportion": 0.97421875
+}

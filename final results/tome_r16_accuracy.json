@@ -1,0 +1,40 @@
+{
+  "label": "tome_r16",
+  "correct": 38790,
+  "total": 50000,
+  "top1_accuracy": 0.7758,
+  "top1_proportion": 0.7758,
+  "correct_top5": 46504,
+  "top5_accuracy": 0.93008,
+  "top5_proportion": 0.93008,
+  "metadata": {
+    "timestamp_utc": "2026-04-26T19:17:30.393577Z",
+    "git_commit": "unknown",
+    "python_version": "3.10.20",
+    "pytorch_version": "2.5.1+cu121",
+    "cuda_version": "12.1",
+    "device_name": "NVIDIA A100-SXM4-40GB",
+    "script_name": "run_token_merging.py",
+    "batch_size": 256,
+    "num_workers": 8,
+    "n_warmup": 100,
+    "n_trials": 100,
+    "args": {
+      "r_values": [
+        4,
+        8,
+        12,
+        14,
+        16
+      ],
+      "batch_size": 256,
+      "num_workers": 8,
+      "fast": false,
+      "device": "cuda",
+      "n_warmup": 100,
+      "n_trials": 100,
+      "skip_accuracy": false,
+      "skip_r0_check": false
+    }
+  }
+}

@@ -1,0 +1,143 @@
+{
+  "experiment": "combined_vs_all",
+  "label": "combined",
+  "r": 8,
+  "alpha": 0.05,
+  "combined_vs_baseline": {
+    "throughput": {
+      "t_stat": 35.08656499431663,
+      "p_value": 7.873267465585528e-74,
+      "significant": true,
+      "ci_low": 1072.5701966978027,
+      "ci_high": 1200.5925665039517,
+      "mean_a": 2545.4327661389257,
+      "mean_b": 3682.014147739803,
+      "improvement_pct": 44.65179346791061,
+      "effect_size": 4.9431704304391335,
+      "practical_interpretation": "large",
+      "baseline_mean": 2545.432766138925,
+      "combined_mean": 3682.014147739803
+    },
+    "memory": {
+      "t_stat": -0.3129565455073153,
+      "p_value": 0.754643086516168,
+      "significant": false,
+      "ci_low": -0.022599050965479303,
+      "ci_high": 0.016408592085479387,
+      "mean_a": 1.2060433408000002,
+      "mean_b": 1.2029481113600002,
+      "improvement_pct": 0.25664330089056425,
+      "effect_size": -0.04409088042715851,
+      "practical_interpretation": "negligible",
+      "baseline_mean": 1.2060433408,
+      "combined_mean": 1.20294811136
+    },
+    "accuracy": {
+      "z_stat": -4.587491984485328,
+      "p_value": 4.486026462746651e-06,
+      "significant": true,
+      "ci_low": -1.618440142841175,
+      "ci_high": -0.6495598571588284,
+      "prop_a": 0.8175,
+      "prop_b": 0.80616,
+      "diff_pct": -1.1340000000000017,
+      "baseline_top1": 0.8175,
+      "combined_top1": 0.80616,
+      "combined_top5": 0.94972
+    }
+  },
+  "combined_vs_tome_r8": {
+    "throughput": {
+      "t_stat": 22.32711849583273,
+      "p_value": 1.197887525776597e-44,
+      "significant": true,
+      "ci_low": 616.385598323347,
+      "ci_high": 736.3371901509372,
+      "mean_a": 3005.6527535026607,
+      "mean_b": 3682.014147739803,
+      "improvement_pct": 22.50297854430919,
+      "effect_size": 3.14555591188218,
+      "practical_interpretation": "large"
+    },
+    "memory": {
+      "t_stat": -1.2986363654939292,
+      "p_value": 0.19557940898112197,
+      "significant": false,
+      "ci_low": -0.032435389826326384,
+      "ci_high": 0.006678001026327492,
+      "mean_a": 1.2158268057599997,
+      "mean_b": 1.2029481113600002,
+      "improvement_pct": 1.059254026888239,
+      "effect_size": -0.18295837403411697,
+      "practical_interpretation": "negligible"
+    },
+    "accuracy": {
+      "z_stat": -2.1391166453408865,
+      "p_value": 0.03242622265518236,
+      "significant": true,
+      "ci_low": -1.0194334392734048,
+      "ci_high": -0.044566560726593485,
+      "prop_a": 0.81148,
+      "prop_b": 0.80616,
+      "diff_pct": -0.5319999999999991
+    }
+  },
+  "combined_vs_flash_only": {
+    "throughput": {
+      "t_stat": -8.31375367982159,
+      "p_value": 1.6104665151398076e-14,
+      "significant": true,
+      "ci_low": -453.5176964405605,
+      "ci_high": -279.59894513376867,
+      "mean_a": 4048.5724685269674,
+      "mean_b": 3682.014147739803,
+      "improvement_pct": -9.05401406635888,
+      "effect_size": -1.1712831211235826,
+      "practical_interpretation": "large"
+    },
+    "memory": {
+      "t_stat": 0.8789842775002675,
+      "p_value": 0.3804752862229781,
+      "significant": false,
+      "ci_low": -0.010748248426724644,
+      "ci_high": 0.028035078506724848,
+      "mean_a": 1.1943046963200001,
+      "mean_b": 1.2029481113600002,
+      "improvement_pct": -0.7237194215708082,
+      "effect_size": 0.12383569295153378,
+      "practical_interpretation": "negligible"
+    },
+    "accuracy": {
+      "z_stat": -4.5220271635766895,
+      "p_value": 6.125019706537671e-06,
+      "significant": true,
+      "ci_low": -1.6025206814687487,
+      "ci_high": -0.6334793185312448,
+      "prop_a": 0.81734,
+      "prop_b": 0.80616,
+      "diff_pct": -1.1179999999999968
+    }
+  },
+  "metadata": {
+    "timestamp_utc": "2026-04-27T00:15:55.554982Z",
+    "git_commit": "unknown",
+    "python_version": "3.10.20",
+    "pytorch_version": "2.5.1+cu121",
+    "cuda_version": "12.1",
+    "device_name": "NVIDIA A100-SXM4-40GB",
+    "script_name": "run_combined.py",
+    "batch_size": 256,
+    "num_workers": 8,
+    "n_warmup": 100,
+    "n_trials": 100,
+    "args": {
+      "batch_size": 256,
+      "num_workers": 8,
+      "fast": false,
+      "device": "cuda",
+      "r": 8,
+      "n_warmup": 100,
+      "n_trials": 100
+    }
+  }
+}
