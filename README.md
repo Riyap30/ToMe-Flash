@@ -147,7 +147,27 @@ conda activate /ext3/env
 ```bash
 pip install -r requirements.txt
 pip install "git+https://github.com/facebookresearch/ToMe.git"
-pip install flash-attn==2.4.2 --no-build-isolation
+
+# D. FlashAttention-2 (takes ~10–15 mins)
+pip install flash-attn --no-build-isolation
+```
+
+---
+
+## Configuration
+
+Before submitting jobs, verify these settings in each `slurm/*.slurm` file:
+
+| Setting | Where | What to change |
+|---|---|---|
+| Account | `#SBATCH --account` | Your NYU HPC allocation (e.g. `ece_gy_9143-2026sp`) |
+| Project directory | Shell variable `PROJECT_NAME` | Name of your folder under `/scratch/$USER/` (default: `ToMe-Flash`) |
+| NetID in output paths | `#SBATCH --output/--error` | Uses `%u` — resolved automatically by SLURM, no change needed |
+
+To override the project directory without editing the scripts:
+
+```bash
+PROJECT_NAME=my_custom_dir sbatch slurm/phase1.slurm
 ```
 
 ### Run commands (from repo root)
