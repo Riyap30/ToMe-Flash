@@ -29,7 +29,7 @@ singularity exec \
     --overlay $PROJECT_DIR/overlay-25GB-500K.ext3:rw \
     --overlay /share/apps/datasets/imagenet/imagenet-val.sqf:ro \
     /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
-    /bin/bash << 'SINGEOF'
+    /bin/bash << SINGEOF
 set -e
 source /ext3/env.sh
 conda activate /ext3/env
